@@ -1,0 +1,25 @@
+# NAS100 Trade Trainer settings. Change values here, not in code.
+
+symbol: NAS100.s            # broker symbol name in MT5 (PU Prime: "NAS100 Cash")
+file_prefix: nas100         # data/<prefix>_<tf>.parquet
+history_months: 12          # M1 history to pull on the first run
+
+# How broker server time relates to real time.
+#   ny_plus_7: server clock = New York time + 7h (GMT+2 winter / GMT+3 summer,
+#              switching on US DST dates). PU Prime, IC Markets, Pepperstone, FTMO.
+#   fixed:     server clock = UTC + fixed_offset_hours all year.
+server_time:
+  mode: ny_plus_7
+  fixed_offset_hours: 2
+
+session:
+  tz: America/New_York
+  start: "08:00"            # practice window start
+  end: "10:00"              # practice window end
+  timeout: "12:00"          # trades still open are closed here
+
+gap_alert_minutes: 5        # flag missing M1 data longer than this inside start..timeout
+spread_points: 1.5          # added on entry
+
+data_dir: data
+timeframes: [M5, M15, H1, H4]
