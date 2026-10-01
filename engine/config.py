@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from data_io.settings import DEFAULT_CONFIG, _parse_time
+from data_io.timeconv import ServerClock
 
 
 @dataclass(frozen=True)
@@ -15,7 +16,7 @@ class PracticeConfig:
     """Settings for rounds, grading and logging."""
 
     tz: str = "America/New_York"
-    timeout: time = time(12, 0)
+    timeout: time = time(17, 0)
     spread: float = 1.5
     session_rounds: int = 10
     no_trade_share: float = 0.25
@@ -26,6 +27,7 @@ class PracticeConfig:
     history_days: dict[str, int] = field(default_factory=lambda: {"M5": 2, "M15": 5, "H1": 15})
     fake_date: date = date(2000, 1, 3)
     log_file: Path = Path("logs/trades.csv")
+    server_clock: ServerClock = ServerClock()
 
 
 def load_practice_config(path: Path | str = DEFAULT_CONFIG) -> PracticeConfig:
@@ -40,7 +42,7 @@ def load_practice_config(path: Path | str = DEFAULT_CONFIG) -> PracticeConfig:
         log_file = path.parent / log_file
     return PracticeConfig(
         tz=raw.get("session", {}).get("tz", d.tz),
-        timeout=_parse_time(raw.get("session", {}).get("timeout", "12:00")),
+        timeout=_parse_time(raw.get("session", {}).get("timeout", "17:00")),
         spread=float(raw.get("spread_points", d.spread)),
         session_rounds=int(pr.get("session_rounds", d.session_rounds)),
         no_trade_share=float(pr.get("no_trade_share", d.no_trade_share)),
@@ -51,4 +53,6 @@ def load_practice_config(path: Path | str = DEFAULT_CONFIG) -> PracticeConfig:
         history_days={k: int(v) for k, v in pr.get("history_days", d.history_days).items()},
         fake_date=date.fromisoformat(str(pr.get("fake_date", d.fake_date))),
         log_file=log_file,
+        server_clock=ServerClock(raw.get("server_time", {}).get("mode", "ny_plus_7"),
+                                 float(raw.get("server_time", {}).get("fixed_offset_hours", 2))),
     )

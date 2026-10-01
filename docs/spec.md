@@ -101,7 +101,7 @@ A session is 10 rounds by default; each round takes under 2 minutes.
 4. **Decide:** choose Long, Short or Skip. For a trade, drag three lines (entry, SL, TP) or type prices. The panel shows R:R and risk in points live.
 5. **Tag:** pick setup type, bias (with / against H1 trend), and confidence 1–5. One optional note.
 6. **Commit:** inputs lock. No edits after this.
-7. **Replay:** candles play forward (speed 1×, 5×, instant). Entry fills only if price reaches it; trade ends at TP, SL or 12:00 NY time-out.
+7. **Replay:** candles play forward (speed 1×, 5×, instant). Entry fills only if price reaches it; trade ends at TP, SL or the 17:00 NY time-out (end of the futures day; was 12:00, changed 2026-09-30).
 8. **Round result:** outcome in R, what the best possible trade was (from MFE/MAE), and the detector type revealed.
 9. **Session report:** after the last round (see Feedback engine).
 
@@ -111,7 +111,7 @@ A session is 10 rounds by default; each round takes under 2 minutes.
 
 The replay engine resolves each trade on M1 bars so the TP-or-SL order is correct inside a single M5 candle.
 
-- **Fill:** market entry fills at the freeze close + spread; limit entry fills only if touched before 12:00 NY, else "not filled".
+- **Fill:** market entry fills at the freeze close + spread; limit entry fills only if touched before the 17:00 NY time-out, else "not filled".
 - **Same-bar conflict:** if one M1 bar hits both TP and SL, count it as a loss (conservative).
 - **Skip grading:** correct skip if neither direction reached +2R before -1R using a default 1×ATR stop; otherwise "missed opportunity".
 - **Plan quality, separate from outcome:** SL beyond the nearest swing (yes/no), R:R ≥ 2 (yes/no), direction matches H1 bias (yes/no). A good plan that loses is still a good plan.

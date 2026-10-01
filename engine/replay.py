@@ -116,6 +116,11 @@ def simulate(m1: pd.DataFrame, order: Order, start_utc: pd.Timestamp, timeout_ut
     seg_h, seg_l = h[k:exit_i + 1], l[k:exit_i + 1]
     fav = (seg_h.max() - fill) if order.side == "long" else (fill - seg_l.min())
     adv = (fill - seg_l.min()) if order.side == "long" else (seg_h.max() - fill)
+    realised = order.sign * (exit_price - fill)
+    if reason == "sl":  # the stop bar's range beyond the stop was never lived through
+        adv = min(adv, -realised)
+    elif reason == "tp":
+        fav = min(fav, realised)
     return TradeResult(
         filled=True, fill_price=fill, fill_time=fill_time,
         exit_price=exit_price, exit_time=t.iloc[exit_i], exit_reason=reason,

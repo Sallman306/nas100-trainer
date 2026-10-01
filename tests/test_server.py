@@ -89,7 +89,7 @@ def test_full_session_logs_every_round(setup) -> None:
         else:
             assert body["exit_reason"] in ("tp", "sl", "timeout")
             assert body["rr_ok"] is True
-            assert pd.Timestamp(body["replay"][-1]["time"], unit="s").strftime("%H:%M") < "12:00"
+            assert pd.Timestamp(body["replay"][-1]["time"], unit="s").strftime("%H:%M") < "17:00"
         assert body["session_done"] == (k == len(decisions) - 1)
     assert client.get("/api/round/next", params={"session_id": sid}).json()["done"] is True
 
@@ -139,3 +139,12 @@ def test_static_page_served(setup) -> None:
     assert client.get("/app.js").status_code == 200
     labels = client.get("/labels.json").json()
     assert set(labels["en"]) == set(labels["fr"])
+
+
+def test_chart_clock_keeps_ny_time_and_weekday() -> None:
+    from datetime import date
+
+    from engine.market import ChartClock
+    t = pd.Timestamp("2026-08-13 13:45", tz="UTC")  # Thu 09:45 NY (EDT)
+    chart = pd.Timestamp(ChartClock(t, "America/New_York", date(2000, 1, 3)).to_chart(t), unit="s")
+    assert chart.strftime("%a %H:%M") == "Thu 09:45" and chart.year == 2000

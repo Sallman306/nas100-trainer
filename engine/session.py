@@ -15,6 +15,8 @@ from engine.market import CHART_TFS, ChartClock, MarketData, timeout_utc
 from engine.picker import plan_session
 from engine.replay import Order, simulate
 from engine.report import session_stats
+from engine.story import Story, market_story
+from engine.trade_story import TradeStory, skip_story, trade_story
 from engine.tradelog import append_row, played_ids, read_rows
 
 LEVELS = [("asian_high", "Asian H"), ("asian_low", "Asian L"), ("london_high", "London H"),
@@ -121,7 +123,13 @@ class Practice:
             "freeze_time": chart.to_chart(freeze), "price": round(float(s["close"]), 2),
             "atr": round(float(s["atr"]), 2), "spread": cfg.spread, "min_rr": cfg.min_rr,
             "timeout": cfg.timeout.strftime("%H:%M"), "charts": charts, "levels": levels,
+            "mt5_offset_min": self._mt5_offset_min(freeze),
         })
+
+    def _mt5_offset_min(self, t: pd.Timestamp) -> int:
+        """Minutes to add to New York time to get the MT5 server clock (for the status bar)."""
+        server = self.cfg.server_clock.from_utc(pd.DatetimeIndex([t]))[0]
+        return int((server - t.tz_convert(self.cfg.tz).tz_localize(None)).total_seconds() // 60)
 
     # ----- commit -----
     def submit(self, round_id: str, form: dict) -> dict:
@@ -139,8 +147,11 @@ class Practice:
         end = timeout_utc(freeze, cfg.timeout, cfg.tz)
         row = self._base_row(rnd, form)
         result: dict = {"decision": decision}
+        story = market_story(s, self.market.history("M5", freeze, cfg.history_days.get("M5", 2)),
+                             self.market.after("M5", freeze, end), cfg.tz)
         if decision == "skip":
             row.update(exit_reason=grade_skip(s), result_r=0.0, entry=None, sl=None, tp=None)
+            mine = skip_story(s, story)
         else:
             price = round(float(s["close"]), 2)  # the price the user saw
             order = self._order(decision, form, price)
@@ -156,6 +167,9 @@ class Practice:
                           fill_time=chart.to_chart(trade.fill_time) if trade.fill_time is not None else None,
                           exit_time=chart.to_chart(trade.exit_time) if trade.exit_time is not None else None,
                           swing_price=checks.swing_price)
+            mine = trade_story(s, order, trade, checks, story, self.market.bars["M1"],
+                               self.market.freeze_end(freeze), end, cfg.tz)
+        result["explain"] = self._explain(story, mine, ChartClock(freeze, cfg.tz, cfg.fake_date))
         append_row(cfg.log_file, row)
         result.update({k: row.get(k) for k in ("result_r", "exit_reason", "filled", "rr_planned", "mfe_r", "mae_r",
                                                 "sl_beyond_swing", "rr_ok", "with_bias", "best_possible_r")})
@@ -198,6 +212,17 @@ class Practice:
             "seconds_to_decide": round(clock.monotonic() - rnd.served_at, 1),
         }
 
+    @staticmethod
+    def _explain(story: Story, mine: TradeStory, chart: ChartClock) -> dict:
+        """Explanation for the result card; event times converted to chart time."""
+        return {
+            "trigger": story.trigger, "context": story.context, "why": story.why,
+            "main_dir": story.main_dir, "main_atr": round(story.main_atr, 2),
+            "events": [{"time": chart.to_chart(e.time_utc), "text": e.text, "kind": e.kind, "price": e.price, "label": e.label}
+                       for e in story.events],
+            "trade": mine.points, "lesson": mine.lesson, "stop_needed": mine.stop_needed,
+        }
+
     def _reveal(self, rnd: Round) -> dict:
         """Hidden answers shown after commit: detector, best possible trade, replay bars."""
         s, cfg = rnd.scenario, self.cfg
@@ -209,6 +234,7 @@ class Practice:
             "detector": s["detector"], "also_detected": s["also_detected"], "direction_hint": s["direction_hint"],
             "level_name": s["level_name"], "level_price": None if pd.isna(s["level_price"]) else float(s["level_price"]),
             "h1_trend": s["h1_trend"], "best_side": best_side, "best_possible_r": float(s["best_possible_r"]),
-            "skip_grade": grade_skip(s), "freeze_time_ny": s["freeze_time_utc"].tz_convert(cfg.tz).strftime("%a %Y-%m-%d %H:%M"),
+            "skip_grade": grade_skip(s), "freeze_time_ny": s["freeze_time_utc"].tz_convert(cfg.tz).strftime("%a %Y-%m-%d"),
+            "freeze_close_ny": self.market.freeze_end(freeze).tz_convert(cfg.tz).strftime("%H:%M"),
             "replay": chart.bars_json(replay),
         }

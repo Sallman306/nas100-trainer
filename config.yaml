@@ -16,7 +16,7 @@ session:
   tz: America/New_York
   start: "08:00"            # practice window start
   end: "10:00"              # practice window end
-  timeout: "12:00"          # trades still open are closed here
+  timeout: "17:00"          # trades still open are closed here (end of the futures day)
 
 gap_alert_minutes: 5        # flag missing M1 data longer than this inside start..timeout
 spread_points: 1.5          # added on entry

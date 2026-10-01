@@ -67,7 +67,7 @@ class MarketData:
 
 
 def timeout_utc(freeze_utc: pd.Timestamp, timeout: time, tz: str) -> pd.Timestamp:
-    """Time-out (e.g. 12:00 NY) on the freeze bar's New York date, in UTC."""
+    """Time-out (e.g. 17:00 NY) on the freeze bar's New York date, in UTC."""
     ny_day = freeze_utc.tz_convert(tz).date()
     return pd.Timestamp(datetime.combine(ny_day, timeout), tz=tz).tz_convert("UTC")
 
@@ -75,14 +75,16 @@ def timeout_utc(freeze_utc: pd.Timestamp, timeout: time, tz: str) -> pd.Timestam
 class ChartClock:
     """Maps real UTC times to chart seconds: NY wall clock shifted to a fake date.
 
-    The chart shows the right New York time of day, but the date is replaced, so the
-    real day cannot be read from the page (or its data).
+    The chart shows the right New York time of day and weekday, but the date is moved
+    by whole weeks to the week of `fake_date`, so the real day cannot be read from the
+    page (or its data).
     """
 
     def __init__(self, freeze_utc: pd.Timestamp, tz: str, fake_date: date) -> None:
         real_day = pd.Timestamp(freeze_utc.tz_convert(tz).date())
         self.tz = tz
-        self.shift = pd.Timestamp(fake_date) - real_day
+        days = (pd.Timestamp(fake_date) - real_day).days
+        self.shift = pd.Timedelta(days=-(-days // 7) * 7)  # whole weeks: the weekday stays real
 
     def to_chart(self, t: pd.Timestamp) -> int:
         """Chart timestamp (seconds) for a UTC time."""
