@@ -23,3 +23,35 @@ spread_points: 1.5          # added on entry
 
 data_dir: data
 timeframes: [M5, M15, H1, H4]
+
+# ---------- Phase 2: scenario detection (all times New York) ----------
+levels:
+  asian: ["20:00", "00:00"]   # previous evening
+  london: ["02:00", "05:00"]
+  day_start: "18:00"          # futures day runs 18:00 -> 17:00 NY; previous day = the one before
+
+detectors:
+  atr_period: 14
+  swing_bars: 2               # fractal swing: N bars lower/higher on each side
+  sweep_reclaim_bars: 3       # wick beyond, close back inside within N bars
+  displacement_atr: 1.5       # body > X * ATR
+  opening_range: ["09:30", "09:45"]
+  fvg_min_atr: 0.1            # ignore gaps smaller than X * ATR
+  priority: [sweep, fvg_retest, bos, orb]   # label when several fire on one bar
+
+controls:
+  share: 0.25                 # no-trade share of all scenarios (keep 0.20-0.30)
+  cooldown_bars: 3            # bar must have no detection in itself and the previous N bars
+  seed: 7
+
+outcome:
+  horizon_bars: 120           # hidden MFE/MAE horizon in M5 bars
+  stop_atr: 1.0               # default stop for R and skip grading
+  target_r: 2.0               # skip is correct if neither side hits +target_r before -1R
+
+h1_trend:
+  fast_ema: 20
+  slow_ema: 50
+  flat_atr: 0.1               # |fast - slow| < X * H1 ATR -> flat
+
+scenarios_file: scenarios.parquet
