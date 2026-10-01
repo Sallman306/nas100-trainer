@@ -55,3 +55,15 @@ h1_trend:
   flat_atr: 0.1               # |fast - slow| < X * H1 ATR -> flat
 
 scenarios_file: scenarios.parquet
+
+# ---------- Phase 3: practice app ----------
+practice:
+  session_rounds: 10
+  no_trade_share: 0.25        # share of no-trade rounds in a mixed session
+  min_rr: 2.0                 # plan check: R:R >= this
+  history_days:               # chart history shown at the freeze bar, per timeframe
+    M5: 2
+    M15: 5
+    H1: 15
+  fake_date: "2000-01-03"     # charts are shifted to this date so the real date stays hidden
+  log_file: logs/trades.csv

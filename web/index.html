@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAS100 Trade Trainer</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg: #0f1218; --panel: #161b24; --line: #262d3a; --text: #d6dbe4; --muted: #8590a3;
+    --up: #26a69a; --down: #ef5350; --accent: #4c8dff; --warn: #f0b429;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: grid; grid-template-rows: 40px 1fr 26px; grid-template-columns: 1fr 300px; height: 100vh; }
+  header { grid-column: 1 / 3; display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel); }
+  header .title { font-weight: 600; }
+  header .spacer { flex: 1; }
+  #chart { position: relative; min-width: 0; min-height: 0; }
+  #chart.near-line { cursor: ns-resize; }
+  aside { border-left: 1px solid var(--line); background: var(--panel); padding: 10px 12px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 10px; }
+  footer { grid-column: 1 / 3; color: var(--muted); font-size: 11px; padding: 5px 12px; border-top: 1px solid var(--line); }
+  button { background: #222a37; color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+    padding: 5px 8px; cursor: pointer; font: inherit; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.long.on { background: var(--up); border-color: var(--up); }
+  button.short.on { background: var(--down); border-color: var(--down); }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { flex: 1; }
+  .grid3 { display: grid; grid-template-columns: 52px 1fr; gap: 4px 8px; align-items: center; }
+  label, .label { color: var(--muted); font-size: 12px; }
+  input, select { background: #0c0f14; color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+    padding: 4px 6px; font: inherit; width: 100%; min-width: 0; }
+  input:disabled, select:disabled { opacity: .6; }
+  .stats { font-variant-numeric: tabular-nums; display: flex; gap: 12px; }
+  .stats b { font-size: 15px; }
+  .msg { color: var(--warn); min-height: 18px; font-size: 12px; }
+  .section { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .card { background: #0c0f14; border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: flex;
+    flex-direction: column; gap: 4px; }
+  .card .big { font-size: 26px; font-weight: 700; }
+  .pos { color: var(--up); } .neg { color: var(--down); }
+  .ok::before { content: "✓ "; color: var(--up); } .ko::before { content: "✗ "; color: var(--down); }
+  #overlay { position: fixed; inset: 0; background: rgba(5, 7, 10, .75); display: flex; align-items: center;
+    justify-content: center; z-index: 10; }
+  #overlay .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px;
+    width: 340px; display: flex; flex-direction: column; gap: 10px; }
+  #overlay h2 { margin: 0 0 4px; font-size: 16px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  td { padding: 2px 0; } td:last-child { text-align: right; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="title" data-l="title"></span>
+    <span id="roundInfo" class="label"></span>
+    <span class="spacer"></span>
+    <span class="row" style="flex:0">
+      <button data-tf="M5">M5 (1)</button><button data-tf="M15">M15 (2)</button><button data-tf="H1">H1 (3)</button>
+    </span>
+  </header>
+
+  <div id="chart"></div>
+
+  <aside>
+    <div id="decidePanel">
+      <div class="row">
+        <button id="btnLong" class="long" data-l="long"></button>
+        <button id="btnShort" class="short" data-l="short"></button>
+        <button id="btnSkip" data-l="skip"></button>
+      </div>
+
+      <div id="orderBox" class="section" hidden>
+        <div class="grid3">
+          <label data-l="entry"></label>
+          <div class="row"><input id="inEntry" type="number" step="0.25"><button id="btnMarket" data-l="market" style="flex:0 0 auto"></button></div>
+          <label data-l="sl"></label><input id="inSl" type="number" step="0.25">
+          <label data-l="tp"></label><input id="inTp" type="number" step="0.25">
+        </div>
+        <div class="stats">
+          <span><span class="label" data-l="rr"></span> <b id="rrOut">–</b></span>
+          <span><span class="label" data-l="risk"></span> <b id="riskOut">–</b> <span class="label" data-l="points"></span></span>
+        </div>
+        <div id="orderType" class="label"></div>
+      </div>
+
+      <div class="section">
+        <label data-l="setup"></label><select id="selSetup"></select>
+        <label data-l="bias"></label><select id="selBias"></select>
+        <label data-l="confidence"></label>
+        <div class="row" id="confRow"></div>
+        <label data-l="note"></label><input id="inNote" type="text" maxlength="300">
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <span class="label" data-l="speed" style="flex:0 0 auto"></span>
+          <button data-speed="1">1x (Z)</button><button data-speed="5">5x (X)</button><button data-speed="0">⏭ (C)</button>
+        </div>
+        <button id="btnCommit" data-l="commit"></button>
+        <div id="msg" class="msg"></div>
+      </div>
+    </div>
+
+    <div id="resultPanel" hidden></div>
+  </aside>
+
+  <footer data-l="help"></footer>
+</div>
+
+<div id="overlay">
+  <div class="box" id="overlayBox">
+    <h2 data-l="start_title"></h2>
+    <label data-l="drill"></label><select id="selDrill"></select>
+    <label data-l="rounds"></label><input id="inRounds" type="number" min="1" max="50">
+    <button id="btnStart" class="on" data-l="start"></button>
+    <div id="startMsg" class="msg"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
