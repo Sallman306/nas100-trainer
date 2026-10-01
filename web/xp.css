@@ -41,7 +41,7 @@ kbd { font: 10px var(--font); color: #444; background: #fff; border: 1px solid #
 .tb-btn.close { background: linear-gradient(180deg, #f39b80, #e2542c 55%, #c73a10); }
 
 /* ---------- toolbar ---------- */
-.toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+.toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 5px 8px;
   background: linear-gradient(180deg, #faf9f4, var(--face)); border-bottom: 1px solid #c3c0b0; }
 .toolbar .sep { width: 1px; height: 24px; background: #c3c0b0; border-right: 1px solid #fff; margin: 0 8px; }
 .tool-label { color: var(--muted); margin: 0 4px; }
@@ -75,6 +75,10 @@ kbd { font: 10px var(--font); color: #444; background: #fff; border: 1px solid #
 #side { flex: 0 0 380px; min-height: 0; display: flex; transition: flex-basis .2s; }
 #side.wide { flex-basis: 560px; }
 .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+/* decision, order and tags scroll when space is short; the commit box always stays visible */
+.decide-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.decide-scroll > .group { flex-shrink: 0; }
+.commit-box { flex: 0 0 auto; }
 
 /* ---------- group boxes ---------- */
 .group { margin: 0; padding: 8px 12px 12px; border: 1px solid var(--group); border-radius: 4px; background: var(--face);
@@ -247,3 +251,14 @@ table.grid td { padding: 3px 8px; border-bottom: 1px solid #eee; }
 [data-theme="dark"] .line-chart .dot.pos { fill: #5fd45a; } [data-theme="dark"] .line-chart .dot.neg { fill: #ff6b5e; }
 [data-theme="dark"] .verdict.positive { color: #5fd45a; } [data-theme="dark"] .verdict.negative { color: #ff6b5e; }
 [data-theme="dark"] .work-no { color: #000; }
+
+/* ---------- instructions page ---------- */
+#helpOverlay { position: fixed; inset: 0; background: rgba(0, 20, 80, .35); display: flex; align-items: center;
+  justify-content: center; z-index: 30; }
+#helpOverlay .dialog-body { height: 86vh; }
+.help-body p { margin: 0; }
+.help-body .steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 5px; }
+.help-body code { background: #fff; border: 1px solid var(--border); padding: 0 4px; }
+.help-body .keys td:nth-child(odd) { white-space: nowrap; width: 1%; }
+[data-theme="dark"] #helpOverlay { background: rgba(0, 0, 0, .6); }
+[data-theme="dark"] .help-body code { background: #1b1b1d; }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NAS100 Trade Trainer</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
-<link rel="stylesheet" href="xp.css">
+<link rel="stylesheet" href="xp.css?v=5">
 </head>
 <body>
 <div id="window">
@@ -33,6 +33,7 @@
     <span id="phaseInfo" class="tool-label"></span>
     <span class="sep"></span>
     <button class="xp-btn" id="btnTheme"></button>
+    <button class="xp-btn" id="btnHelp">❔ Help <kbd>H</kbd></button>
   </div>
 
   <div id="main">
@@ -46,6 +47,7 @@
     <aside id="side">
       <!-- decision panel -->
       <div id="decidePanel" class="panel">
+        <div class="decide-scroll">
         <fieldset class="group">
           <legend data-l="decision"></legend>
           <div class="decide-row">
@@ -82,8 +84,9 @@
             <label data-l="note"></label><input id="inNote" type="text" maxlength="300">
           </div>
         </fieldset>
+        </div>
 
-        <fieldset class="group">
+        <fieldset class="group commit-box">
           <legend data-l="commit_box"></legend>
           <button id="btnCommit" class="xp-btn go"><span data-l="commit"></span> <kbd>Enter</kbd></button>
           <div id="msg" class="msg"></div>
@@ -121,12 +124,123 @@
       </fieldset>
       <button id="btnStart" class="xp-btn go"><span data-l="start"></span> <kbd>Enter</kbd></button>
       <button id="btnProgress" class="xp-btn"><span data-l="progress"></span> <kbd>P</kbd></button>
+      <button id="btnHelpStart" class="xp-btn">❔ How to use <kbd>H</kbd></button>
       <div id="startMsg" class="msg"></div>
     </div>
   </div>
 </div>
 
-<script src="app.js"></script>
-<script src="report.js"></script>
+<!-- instructions (H or ? to open / close); numbers in [data-cfg] come from config.yaml via /api/meta -->
+<div id="helpOverlay" hidden>
+  <div class="dialog wide">
+    <div class="titlebar small"><span class="app-icon">❔</span><span class="title">How to use the trainer</span>
+      <span class="spacer"></span><span class="tb-btn close" id="helpX">✕</span></div>
+    <div class="dialog-body help-body">
+      <div class="report-scroll">
+        <fieldset class="group"><legend>What this is</legend>
+          <p>A flight simulator for NAS100 trading. Each round freezes a real chart at a decision moment between
+          <b data-cfg="window_start"></b> and <b data-cfg="window_end"></b> New York time. You decide Long, Short or Skip,
+          place entry, stop and target, then the next candles replay and you are graded. The real date is hidden so you
+          cannot remember what happened.</p>
+          <p>About <b data-cfg="no_trade_pct"></b> of rounds are <i>no-trade</i> rounds on purpose: Skip is a real answer
+          and is scored. The trainer looks for <b>big moves</b>: a good trade aims for at least
+          <b data-cfg="target_r"></b>R.</p>
+        </fieldset>
+
+        <fieldset class="group"><legend>A round, step by step</legend>
+          <ol class="steps">
+            <li><b>Start.</b> Pick a drill (one setup type only, or all) and the number of rounds (default
+              <b data-cfg="session_rounds"></b>), then <kbd>Enter</kbd>.</li>
+            <li><b>Read the chart.</b> The last candle on the right is "now". Switch M5 / M15 / H1 with <kbd>1</kbd>
+              <kbd>2</kbd> <kbd>3</kbd>. Dashed lines are the Asian, London and previous-day highs/lows.</li>
+            <li><b>Decide.</b> <kbd>L</kbd> long, <kbd>S</kbd> short, <kbd>K</kbd> skip.</li>
+            <li><b>Plan the order.</b> Entry, SL and TP lines appear (SL 1×ATR, TP at <b data-cfg="min_rr"></b>R).
+              Drag them on the chart or type prices. Watch R:R and risk in the panel.</li>
+            <li><b>Tag it.</b> Setup type (<kbd>T</kbd>), bias with/against the H1 trend (<kbd>B</kbd>), confidence 1–5
+              (<kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>5</kbd>), and an optional note (<kbd>/</kbd>). Write why
+              <i>before</i> you see the result.</li>
+            <li><b>Commit</b> with <kbd>Enter</kbd>. Inputs lock; no changes after this.</li>
+            <li><b>Replay.</b> Candles play forward. Speed: <kbd>Z</kbd> 1×, <kbd>X</kbd> 5×, <kbd>C</kbd> instant.</li>
+            <li><b>Result.</b> Your R, what happened and why, the setup type revealed, and the ideal trade
+              (<kbd>I</kbd> shows it on the chart). <kbd>Enter</kbd> for the next round.</li>
+            <li><b>Report.</b> After the last round: your stats and the "work on this" list.</li>
+          </ol>
+        </fieldset>
+
+        <fieldset class="group"><legend>Placing the order</legend>
+          <ul class="blist">
+            <li class="info"><span><b>Market order</b> (default, <kbd>M</kbd>): fills at the frozen close +
+              <b data-cfg="spread"></b> points spread.</span></li>
+            <li class="info"><span><b>Pending order</b>: drag the entry line (or type a price). SL and TP move with it,
+              so your risk and R:R stay the same. It only fills if price reaches it before <b data-cfg="timeout"></b> ET;
+              otherwise "not filled".</span></li>
+            <li class="info"><span>Drag SL or TP on their own to change risk or target. Long: SL below entry, TP above.
+              Short: the opposite.</span></li>
+            <li class="info"><span>1R = your stop distance. A trade that hits TP at 3× the stop distance = +3R.</span></li>
+          </ul>
+        </fieldset>
+
+        <fieldset class="group"><legend>How you are graded</legend>
+          <ul class="blist">
+            <li class="info"><span>Trades are resolved on 1-minute candles. If one candle touches both SL and TP, it
+              counts as a <b>loss</b>.</span></li>
+            <li class="info"><span>Trades still open at <b data-cfg="timeout"></b> ET are closed at that price
+              (time-out).</span></li>
+            <li class="info"><span><b>Skip</b> is correct when neither direction reached +<b data-cfg="target_r"></b>R
+              before −1R (stop = <b data-cfg="stop_atr"></b>×ATR). Otherwise it is a "missed opportunity".</span></li>
+            <li class="info"><span><b>Plan quality</b>, separate from the result: SL beyond the nearest swing, R:R ≥
+              <b data-cfg="min_rr"></b>, direction with the H1 trend. A good plan that loses is still a good
+              plan.</span></li>
+          </ul>
+        </fieldset>
+
+        <fieldset class="group"><legend>Report, progress and coaching</legend>
+          <ul class="blist">
+            <li class="info"><span>The session report shows win rate, expectancy (average R per trade), total R, skip
+              accuracy and plan quality, split by setup type, long/short and confidence. <kbd>Tab</kbd> switches to
+              all-time.</span></li>
+            <li class="info"><span>"Work on this" picks your 3 costliest habits from rules. Verdicts need at least
+              <b data-cfg="min_trades"></b> trades; below that it says "not enough data".</span></li>
+            <li class="info"><span><b>All-time progress</b>: <kbd>P</kbd> on the start screen.</span></li>
+            <li class="info"><span><b>Export for review</b> (<kbd>E</kbd> on the report) writes
+              <code><span data-cfg="export_dir"></span>/session_&lt;id&gt;.md</code>: your trades plus the chart
+              context of every round. Attach it in a Claude chat or Claude Code; the coaching prompt is at the top of
+              the file.</span></li>
+          </ul>
+        </fieldset>
+
+        <fieldset class="group"><legend>Keyboard shortcuts</legend>
+          <table class="grid keys">
+            <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>M5 / M15 / H1</td>
+                <td><kbd>L</kbd> <kbd>S</kbd> <kbd>K</kbd></td><td>Long / Short / Skip</td></tr>
+            <tr><td><kbd>M</kbd></td><td>Market entry</td><td><kbd>Enter</kbd></td><td>Start / commit / next</td></tr>
+            <tr><td><kbd>T</kbd> <kbd>B</kbd></td><td>Cycle setup / bias tag</td>
+                <td><kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>5</kbd></td><td>Confidence</td></tr>
+            <tr><td><kbd>/</kbd></td><td>Write a note</td><td><kbd>Esc</kbd></td><td>Leave a text field</td></tr>
+            <tr><td><kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd></td><td>Replay 1× / 5× / instant</td>
+                <td><kbd>I</kbd></td><td>Show the ideal trade</td></tr>
+            <tr><td><kbd>E</kbd></td><td>Export (report)</td><td><kbd>P</kbd></td><td>All-time progress (start)</td></tr>
+            <tr><td><kbd>D</kbd></td><td>Dark / light theme</td><td><kbd>H</kbd> <kbd>?</kbd></td><td>This page</td></tr>
+          </table>
+        </fieldset>
+
+        <fieldset class="group"><legend>How to practise</legend>
+          <ul class="blist">
+            <li class="good"><span>3 sessions of 10 rounds per week.</span></li>
+            <li class="good"><span>Judge the decision, not the outcome: read the "why" and the plan checks, not just
+              the R.</span></li>
+            <li class="good"><span>After about 100 trades, keep only the setups with positive expectancy and drill them
+              (pick the setup in "Drill" on the start screen).</span></li>
+          </ul>
+        </fieldset>
+      </div>
+      <div class="report-foot"><span class="sub-hint">Open this page any time with <kbd>H</kbd>.</span>
+        <button id="btnHelpClose" class="xp-btn go">Got it <kbd>Enter</kbd></button></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=5"></script>
+<script src="report.js?v=5"></script>
 </body>
 </html>

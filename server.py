@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
 from data_io.settings import load_settings
@@ -29,6 +29,14 @@ def create_app(factory: Callable[[], Practice] = default_practice) -> FastAPI:
     """Build the app; data is loaded on the first API call (tests pass their own factory)."""
     app = FastAPI(title="NAS100 Trade Trainer")
     state: dict[str, Practice] = {}
+
+    @app.middleware("http")
+    async def no_stale_files(request: Request, call_next):
+        """Make the browser re-check the page files on every load, so an update never mixes old and new files."""
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     def practice() -> Practice:
         if "p" not in state:
@@ -56,6 +64,11 @@ def create_app(factory: Callable[[], Practice] = default_practice) -> FastAPI:
         """Session stats, splits, coaching ("work on this") and the logged rows."""
         return call(lambda: practice().report(session_id))
 
+    @app.post("/api/session/{session_id}/export")
+    def export(session_id: str) -> dict:
+        """Write exports/session_<id>.md (log rows + per-round context) and return its path."""
+        return call(lambda: practice().export(session_id))
+
     @app.get("/api/progress")
     def progress() -> dict:
         """All-time tab: per-session series, overall stats, splits and coaching."""
@@ -63,10 +76,15 @@ def create_app(factory: Callable[[], Practice] = default_practice) -> FastAPI:
 
     @app.get("/api/meta")
     def meta() -> dict:
-        """Detector names (for the drill filter) and the default session length."""
+        """Detector names (drill filter), session length, and the settings quoted on the help page."""
         p = practice()
+        c = p.cfg
         return {"detectors": sorted(p.market.scenarios["detector"].unique().tolist()),
-                "session_rounds": p.cfg.session_rounds}
+                "session_rounds": c.session_rounds, "spread": c.spread, "target_r": c.target_r,
+                "min_rr": c.min_rr, "stop_atr": c.stop_atr, "no_trade_share": c.no_trade_share,
+                "window_start": c.window[0].strftime("%H:%M"), "window_end": c.window[1].strftime("%H:%M"),
+                "timeout": c.timeout.strftime("%H:%M"), "min_trades": c.feedback.min_trades,
+                "export_dir": c.export_dir.name}
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app

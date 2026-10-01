@@ -14,6 +14,7 @@ from engine.grading import grade_skip, plan_checks
 from engine.market import CHART_TFS, ChartClock, MarketData, timeout_utc
 from engine.picker import plan_session
 from engine.replay import Order, simulate
+from engine.export import write_export
 from engine.feedback import progress_report, session_report
 from engine.holding import bars_held
 from engine.ideal import ideal_setup
@@ -198,6 +199,17 @@ class Practice:
             raise RoundError("unknown session", 404)
         rep = session_report(rows, all_rows, self.cfg.feedback)
         return jsonable({"session_id": session_id, **rep, "rows": rows})
+
+    def export(self, session_id: str) -> dict:
+        """Write exports/session_<id>.md for AI coaching outside the app."""
+        rows = read_rows(self.cfg.log_file, session_id)
+        if not rows:
+            raise RoundError("no logged rounds for this session", 404)
+        try:
+            path = write_export(rows, self.by_id, self.market, self.cfg, session_id)
+        except ValueError as exc:
+            raise RoundError(str(exc), 422) from exc
+        return {"session_id": session_id, "path": str(path), "rounds": len(rows)}
 
     def progress(self) -> dict:
         """All-time tab: every logged session."""

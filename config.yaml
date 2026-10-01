@@ -67,6 +67,8 @@ practice:
     H1: 15
   fake_date: "2000-01-03"     # charts are shifted to this date so the real date stays hidden
   log_file: logs/trades.csv
+  export_dir: exports         # "Export for review" writes session_<id>.md here
+  export_bars: 30             # M5 bars before (incl. freeze) and after the freeze in the export
 
 # ---------- Phase 4: feedback / coaching rules ----------
 feedback:

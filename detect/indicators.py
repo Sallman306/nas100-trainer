@@ -46,12 +46,13 @@ def last_swing_levels(df: pd.DataFrame, n: int) -> tuple[np.ndarray, np.ndarray]
     return pd.Series(sh).ffill().to_numpy(), pd.Series(sl).ffill().to_numpy()
 
 
-def h1_trend_at(h1: pd.DataFrame, at_utc: pd.Timestamp, fast: int, slow: int, flat_atr: float) -> str:
-    """H1 trend ("up"/"down"/"flat") from H1 bars fully closed by `at_utc`.
+def h1_trend_at(h1: pd.DataFrame, at_utc: pd.Timestamp, fast: int, slow: int, flat_atr: float,
+                span: pd.Timedelta = pd.Timedelta(hours=1)) -> str:
+    """Trend ("up"/"down"/"flat") from bars fully closed by `at_utc` (H1 by default; `span` = bar length).
 
     up: EMA(fast) > EMA(slow) by more than flat_atr * ATR(14); down: the reverse.
     """
-    closed = h1[h1["time_utc"] + pd.Timedelta(hours=1) <= at_utc]
+    closed = h1[h1["time_utc"] + span <= at_utc]
     if len(closed) < slow:
         return "flat"
     close = closed["close"]

@@ -48,7 +48,7 @@ nas100-trainer/
 ├── web/
 │   ├── index.html
 │   ├── app.js           # Lightweight Charts, drag lines, replay
-│   └── labels.json      # EN/FR text
+│   └── labels.json      # UI text (English)
 ├── data/                # parquet files (git-ignored)
 ├── logs/trades.csv
 └── tests/test_lookahead.py
@@ -105,7 +105,7 @@ A session is 10 rounds by default; each round takes under 2 minutes.
 8. **Round result:** outcome in R, what the best possible trade was (from MFE/MAE), and the detector type revealed.
 9. **Session report:** after the last round (see Feedback engine).
 
-**UI rules:** dark theme, one screen, no scrolling during a round, keyboard shortcuts for every step (L / S / K for long, short, skip; Enter to commit), bilingual labels EN/FR from one `labels.json`.
+**UI rules:** dark theme, one screen, no scrolling during a round, keyboard shortcuts for every step (L / S / K for long, short, skip; Enter to commit), English labels from one `labels.json` (French dropped 2026-10-01). Dragging the entry line moves SL and TP with it; the commit button always stays visible.
 
 ## Trade evaluation and logging
 
@@ -171,7 +171,7 @@ Build in this order; each phase is usable on its own and ends with a check you c
 
 **Phase 5: Polish and AI coaching**
 
-- [ ] Drill mode, keyboard shortcuts, EN/FR toggle
+- [ ] Drill mode, keyboard shortcuts
 - [ ] Export for review button writes exports/session\_\<id>.md
 
 **Practice plan once built:** 3 sessions of 10 rounds per week; after 100 trades, keep only setups with positive expectancy and drill those.
@@ -236,7 +236,7 @@ Phase 4. Read "Feedback engine". Build engine/feedback.py and the session report
 ```
 
 ```text
-Phase 5. Add drill mode, EN/FR toggle, and an "Export for review" button that writes exports/session_<id>.md: the session CSV rows plus per round the detector, H1/M15 trend, key levels, last 30 M5 bars before freeze and 30 after (OHLC table), my decision and result.
+Phase 5. Add drill mode and an "Export for review" button that writes exports/session_<id>.md: the session CSV rows plus per round the detector, H1/M15 trend, key levels, last 30 M5 bars before freeze and 30 after (OHLC table), my decision and result.
 ```
 
 **Coaching prompt (paste with the export file, in chat or Claude Code)**

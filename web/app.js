@@ -22,7 +22,7 @@ const CHART_THEMES = {
 };
 
 const S = {
-  L: null, lang: "en", meta: null,
+  L: null, meta: null,
   sessionId: null, drill: "", rounds: 10,
   round: null, phase: "start", // start | decide | replay | result | report
   tf: "M5", tfUsed: new Set(), decision: null, orderType: "market",
@@ -59,13 +59,10 @@ async function api(url, opts) {
 
 // ---------- labels ----------
 async function loadLabels() {
-  const all = await (await fetch("labels.json")).json();
-  try { S.lang = localStorage.getItem("lang") || "en"; } catch { S.lang = "en"; }
-  S.L = all[S.lang] || all.en;
+  S.L = (await (await fetch("labels.json")).json()).en;
   document.querySelectorAll("[data-l]").forEach((el) => { el.textContent = t(el.dataset.l); });
   $("selSetup").innerHTML = SETUPS.map((k) => `<option value="${k}">${S.L.setups[k]}</option>`).join("");
   $("selBias").innerHTML = BIASES.map((k) => `<option value="${k}">${S.L.biases[k]}</option>`).join("");
-  $("confRow").innerHTML = [1, 2, 3, 4, 5].map((n) => `<button class="xp-btn" data-conf="${n}">${n}</button>`).join("");
 }
 
 // ---------- chart ----------
@@ -208,10 +205,17 @@ window.addEventListener("mousemove", (e) => {
   if (!S.dragging) { $("chart").classList.toggle("near-line", !!lineNear(localY(e))); return; }
   const p = series.coordinateToPrice(localY(e));
   if (p === null) return;
-  S.lines[S.dragging] = round4(p);
-  if (S.dragging === "entry") S.orderType = "pending";
+  if (S.dragging === "entry") moveEntry(round4(p));
+  else S.lines[S.dragging] = round4(p);
   syncInputs(); drawTradeLines(); updatePlan();
 });
+/** Move the entry and carry SL and TP with it, so risk and R:R stay the same. */
+function moveEntry(price) {
+  const d = price - S.lines.entry;
+  const round2 = (x) => Math.round(x * 100) / 100;
+  S.lines = { entry: price, sl: round2(S.lines.sl + d), tp: round2(S.lines.tp + d) };
+  S.orderType = "pending";
+}
 window.addEventListener("mouseup", () => {
   if (!S.dragging) return;
   S.dragging = null;
@@ -327,9 +331,13 @@ async function nextRound() {
   $("decisionHint").textContent = t("choose");
   $("selSetup").value = "other"; $("selBias").value = "none"; $("inNote").value = ""; setConfidence(3);
   lockInputs(false); setMsg("");
-  const drill = r.drill ? ` · ${t("drill")}: ${S.L.setups[r.drill] || r.drill}` : "";
-  $("roundInfo").textContent = `${t("round")} ${r.round_no} / ${r.total_rounds}${drill}`;
+  $("roundInfo").textContent = roundTitle(r);
   showTf("M5");
+}
+
+function roundTitle(r) {
+  const drill = r.drill ? ` · ${t("drill")}: ${S.L.setups[r.drill] || r.drill}` : "";
+  return `${t("round")} ${r.round_no} / ${r.total_rounds}${drill}`;
 }
 
 async function commit() {
@@ -515,11 +523,19 @@ function advance() {
 // ---------- start screen ----------
 async function initStart() {
   S.meta = await api("/api/meta");
-  $("selDrill").innerHTML = `<option value="">${t("drill_all")}</option>` +
-    S.meta.detectors.map((d) => `<option value="${d}">${S.L.setups[d] || d}</option>`).join("");
+  fillDrills();
   $("inRounds").value = S.meta.session_rounds;
   $("btnStart").onclick = startSession;
   $("btnProgress").onclick = showProgress;
+  fillHelp();
+  let seen = false;
+  try { seen = localStorage.getItem("helpSeen") === "1"; } catch { /* ignore */ }
+  if (!seen) showHelp(true); // first visit: show the instructions once
+}
+
+function fillDrills() {
+  $("selDrill").innerHTML = `<option value="">${t("drill_all")}</option>` +
+    S.meta.detectors.map((d) => `<option value="${d}">${S.L.setups[d] || d}</option>`).join("");
 }
 
 async function startSession() {
@@ -535,9 +551,35 @@ async function startSession() {
   }
 }
 
+// ---------- instructions page ----------
+function helpOpen() { const el = $("helpOverlay"); return !!el && !el.hidden; }
+function fillHelp() {
+  const m = S.meta;
+  if (!m) return;
+  const values = { ...m, no_trade_pct: Math.round(m.no_trade_share * 100) + "%" };
+  document.querySelectorAll("[data-cfg]").forEach((el) => { el.textContent = values[el.dataset.cfg] ?? "–"; });
+}
+function showHelp(on) {
+  if (!$("helpOverlay")) return;
+  $("helpOverlay").hidden = !on;
+  if (on) { document.activeElement?.blur(); $("helpOverlay").querySelector(".report-scroll").scrollTop = 0; }
+  else { try { localStorage.setItem("helpSeen", "1"); } catch { /* ignore */ } }
+}
+
 // ---------- keyboard ----------
 document.addEventListener("keydown", (e) => {
-  const inField = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName);
+  // only typing in a text/price box pauses the shortcuts; dropdowns and buttons never do
+  const el = document.activeElement;
+  const inField = !!el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !el.closest("[hidden]")));
+  if (el && el.tagName === "SELECT" && !e.ctrlKey && !e.metaKey && !e.altKey && e.key !== "Tab" && !e.key.startsWith("Arrow")) {
+    el.blur(); // a focused dropdown would eat L/S/K etc. as option jumps
+    if (e.key.length === 1 || e.key === "Enter") e.preventDefault();
+  }
+  if (helpOpen()) { // the instructions page takes every key until it is closed
+    if (["Escape", "Enter", "h", "H", "?"].includes(e.key)) { e.preventDefault(); showHelp(false); }
+    return;
+  }
+  if (!inField && (e.key === "h" || e.key === "H" || e.key === "?")) { showHelp(true); return; }
   if (e.key === "Escape") { document.activeElement?.blur(); return; }
   if (e.key === "Enter") {
     e.preventDefault();
@@ -571,6 +613,15 @@ document.addEventListener("keydown", (e) => {
 // ---------- wiring ----------
 document.querySelectorAll("[data-tf]").forEach((b) => { b.onclick = () => showTf(b.dataset.tf); });
 document.querySelectorAll("[data-speed]").forEach((b) => { b.onclick = () => setSpeed(Number(b.dataset.speed)); });
+for (const [id, on] of [["btnHelp", true], ["btnHelpStart", true], ["btnHelpClose", false], ["helpX", false]]) {
+  if ($(id)) $(id).onclick = () => showHelp(on);
+}
+// clicking the chart or a dropdown choice hands the keyboard back to the shortcuts
+$("chart").addEventListener("mousedown", () => {
+  const el = document.activeElement;
+  if (el && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) el.blur();
+});
+document.querySelectorAll("select").forEach((sel) => sel.addEventListener("change", () => sel.blur()));
 $("btnLong").onclick = () => decide("long");
 $("btnShort").onclick = () => decide("short");
 $("btnSkip").onclick = () => decide("skip");
@@ -583,6 +634,7 @@ $("inSl").addEventListener("input", (e) => onPriceInput("sl", e.target.value));
 $("inTp").addEventListener("input", (e) => onPriceInput("tp", e.target.value));
 
 (async () => {
+  $("confRow").innerHTML = [1, 2, 3, 4, 5].map((n) => `<button class="xp-btn" data-conf="${n}">${n}</button>`).join("");
   await loadLabels();
   applyTheme(S.theme);
   document.querySelectorAll("#confRow [data-conf]").forEach((b) => { b.onclick = () => setConfidence(Number(b.dataset.conf)); });

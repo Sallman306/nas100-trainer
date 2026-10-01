@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -147,7 +148,7 @@ def test_static_page_served(setup) -> None:
     assert "lightweight-charts" in client.get("/").text
     assert client.get("/app.js").status_code == 200
     labels = client.get("/labels.json").json()
-    assert set(labels["en"]) == set(labels["fr"])
+    assert list(labels) == ["en"]  # English only (French dropped)
 
 
 def test_chart_clock_keeps_ny_time_and_weekday() -> None:
@@ -157,3 +158,85 @@ def test_chart_clock_keeps_ny_time_and_weekday() -> None:
     t = pd.Timestamp("2026-08-13 13:45", tz="UTC")  # Thu 09:45 NY (EDT)
     chart = pd.Timestamp(ChartClock(t, "America/New_York", date(2000, 1, 3)).to_chart(t), unit="s")
     assert chart.strftime("%a %H:%M") == "Thu 09:45" and chart.year == 2000
+
+
+def _play(client: TestClient, decisions: list[str], drill: str | None = None) -> str:
+    """Play one session with default 1R/3R market orders; return its id."""
+    sid = None
+    for decision in decisions:
+        params = {"session_id": sid} if sid else ({"drill": drill} if drill else {})
+        r = client.get("/api/round/next", params=params).json()
+        sid = r["session_id"]
+        sign = 1 if decision == "long" else -1
+        form = {"decision": decision, "order_type": "market", "sl": r["price"] - sign * r["atr"],
+                "tp": r["price"] + sign * 3 * r["atr"], "confidence": 3, "note": "why | not"}
+        assert client.post(f"/api/round/{r['round_id']}/submit", json=form).status_code == 200
+    return sid
+
+
+def test_export_for_review(setup, market: MarketData, tmp_path: Path) -> None:
+    client, practice = setup
+    practice.cfg = replace(practice.cfg, export_dir=tmp_path / "exports")
+    sid = _play(client, ["long", "skip", "short", "long"])
+    res = client.post(f"/api/session/{sid}/export")
+    assert res.status_code == 200, res.text
+    path = Path(res.json()["path"])
+    assert path == tmp_path / "exports" / f"session_{sid}.md" and res.json()["rounds"] == 4
+    text = path.read_text(encoding="utf-8")
+
+    # the CSV block is the logged rows, unchanged
+    csv_block = text.split("```csv\n")[1].split("```")[0]
+    assert csv_block == practice.cfg.log_file.read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert "You are my NAS100 trading coach" in text
+
+    sections = text.split("\n## Round ")[1:]
+    assert [s.split(":")[0] for s in sections] == ["1", "2", "3", "4"]
+    by_id = practice.by_id
+    rows = list(csv.DictReader(practice.cfg.log_file.open(newline="", encoding="utf-8")))
+    for sec, row in zip(sections, rows):
+        scen = by_id.loc[row["scenario_id"]]
+        assert f"H1 {scen['h1_trend']} · M15 " in sec
+        assert re.search(r"M15 (up|down|flat)", sec)
+        assert f"Decision: **{row['decision']}**" in sec
+        before, after = sec.split("### Last ")[1], sec.split("### Next ")[1]
+        b_rows = [ln for ln in before.split("### Next")[0].splitlines() if ln.startswith("| ") and ":" in ln[:8]]
+        a_rows = [ln for ln in after.splitlines() if ln.startswith("| ") and ":" in ln[:8]]
+        assert len(b_rows) == 30 and len(a_rows) == 30
+        freeze_ny = scen["freeze_time_utc"].tz_convert("America/New_York").strftime("%H:%M")
+        assert b_rows[-1].startswith(f"| {freeze_ny} ← freeze |")
+        # first bar after = the bar right after the freeze bar
+        nxt = (scen["freeze_time_utc"] + pd.Timedelta(minutes=5)).tz_convert("America/New_York").strftime("%H:%M")
+        assert a_rows[0].startswith(f"| {nxt} |")
+    assert "Skip graded:" in sections[1]
+
+
+def test_export_errors(setup) -> None:
+    client, _ = setup
+    assert client.post("/api/session/nope/export").status_code == 404
+    from engine.export import export_path
+    with pytest.raises(ValueError):
+        export_path(Path("exports"), "../evil")
+
+
+def test_drill_session_only_serves_that_detector(setup) -> None:
+    client, practice = setup
+    r = client.get("/api/round/next", params={"drill": "bos"}).json()
+    sid = r["session_id"]
+    while not r["done"]:
+        assert client.post(f"/api/round/{r['round_id']}/submit", json={"decision": "skip"}).status_code == 200
+        r = client.get("/api/round/next", params={"session_id": sid}).json()
+    served = practice.sessions[sid].rounds
+    assert served and {x.scenario["detector"] for x in served} == {"bos"}
+
+
+def test_page_files_not_cached_and_help_settings(setup) -> None:
+    client, _ = setup
+    assert client.get("/app.js").headers["cache-control"] == "no-cache"
+    assert client.get("/xp.css").headers["cache-control"] == "no-cache"
+    page = client.get("/").text
+    assert 'id="helpOverlay"' in page and 'id="btnCommit"' in page
+    meta = client.get("/api/meta").json()
+    for key in ("spread", "target_r", "min_rr", "timeout", "window_start", "window_end", "min_trades", "export_dir"):
+        assert key in meta
+    cfg_keys = set(re.findall(r'data-cfg="(\w+)"', page)) - {"no_trade_pct"}
+    assert cfg_keys <= set(meta)  # every number on the help page comes from config
