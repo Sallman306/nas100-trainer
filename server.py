@@ -53,8 +53,13 @@ def create_app(factory: Callable[[], Practice] = default_practice) -> FastAPI:
 
     @app.get("/api/session/{session_id}/report")
     def report(session_id: str) -> dict:
-        """Logged rounds and basic stats of a session."""
+        """Session stats, splits, coaching ("work on this") and the logged rows."""
         return call(lambda: practice().report(session_id))
+
+    @app.get("/api/progress")
+    def progress() -> dict:
+        """All-time tab: per-session series, overall stats, splits and coaching."""
+        return call(lambda: practice().progress())
 
     @app.get("/api/meta")
     def meta() -> dict:

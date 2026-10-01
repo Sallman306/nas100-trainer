@@ -510,26 +510,7 @@ function advance() {
   if (S.result.session_done) showReport(); else nextRound().catch((e) => setMsg(e.message));
 }
 
-// ---------- session report (Phase 4 extends) ----------
-async function showReport() {
-  setPhase("report");
-  const rep = await api(`/api/session/${S.sessionId}/report`);
-  const s = rep.stats;
-  $("dialogTitle").textContent = t("report");
-  $("overlayBox").innerHTML = `
-    <table>
-      <tr><td>${t("trades")}</td><td>${s.trades} / ${s.rounds}</td></tr>
-      <tr><td>${t("win_rate")}</td><td>${pct(s.win_rate)}</td></tr>
-      <tr><td>${t("total_r")}</td><td>${fmtR(s.total_r)}</td></tr>
-      <tr><td>${t("avg_r")}</td><td>${fmtR(s.avg_r)}</td></tr>
-      <tr><td>${t("skip_accuracy")}</td><td>${pct(s.skip_accuracy)}</td></tr>
-      <tr><td>${t("avg_rr")}</td><td>${fmt(s.avg_rr_planned)}</td></tr>
-      <tr><td>${t("plan_quality")}</td><td>${pct(s.plan_quality)}</td></tr>
-    </table>
-    <button id="btnNew" class="xp-btn go">${t("new_session")} <kbd>Enter</kbd></button>`;
-  $("overlay").hidden = false;
-  $("btnNew").onclick = () => location.reload();
-}
+// ---------- session report: see report.js ----------
 
 // ---------- start screen ----------
 async function initStart() {
@@ -538,6 +519,7 @@ async function initStart() {
     S.meta.detectors.map((d) => `<option value="${d}">${S.L.setups[d] || d}</option>`).join("");
   $("inRounds").value = S.meta.session_rounds;
   $("btnStart").onclick = startSession;
+  $("btnProgress").onclick = showProgress;
 }
 
 async function startSession() {
@@ -562,10 +544,15 @@ document.addEventListener("keydown", (e) => {
     if (S.phase === "start") startSession();
     else if (S.phase === "decide") commit();
     else if (S.phase === "result") advance();
-    else if (S.phase === "report") location.reload();
+    else if (S.phase === "report" || S.phase === "progress") closeReport();
     return;
   }
+  if ((S.phase === "report" || S.phase === "progress") && !inField) {
+    if (e.key === "Tab") e.preventDefault();
+    if (reportKey(e.key.toLowerCase())) return;
+  }
   if (inField || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (S.phase === "start" && e.key.toLowerCase() === "p") { showProgress(); return; }
   if (e.shiftKey && /^Digit[1-5]$/.test(e.code)) { if (S.phase === "decide") setConfidence(Number(e.code.slice(5))); return; }
   const key = e.key.toLowerCase();
   const actions = {

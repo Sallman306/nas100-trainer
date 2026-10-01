@@ -98,7 +98,7 @@
       "against": "Against H1",
       "none": "No bias"
     },
-    "help": "Times are New York (ET) · 1/2/3 timeframe · L/S/K decide · drag lines or type prices · M market · T setup · B bias · Shift+1-5 confidence · / note · Enter commit · I ideal · D dark/light",
+    "help": "Times are New York (ET) · 1/2/3 timeframe · L/S/K decide · drag lines or type prices · M market · T setup · B bias · Shift+1-5 confidence · / note · Enter commit · I ideal · D dark/light · G language",
     "theme_dark": "Dark",
     "theme_light": "Light",
     "ideal": "Ideal setup (hindsight)",
@@ -106,7 +106,86 @@
     "show_ideal": "Show ideal on chart",
     "hide_ideal": "Hide ideal",
     "setup_context": "Setup & context at the freeze",
-    "you_skipped": "You skipped"
+    "you_skipped": "You skipped",
+    "tab_session": "This session",
+    "tab_alltime": "All time",
+    "progress": "All-time progress",
+    "work_on": "Work on this",
+    "r_lost": "R lost",
+    "not_enough_data": "not enough data",
+    "need_more": "{sample}/{need} trades",
+    "nothing_flagged": "Nothing flagged by the rules. Keep drilling.",
+    "all_not_enough": "Not enough data yet: the rules need {need} trades per sample (you have {filled} filled trades all-time).",
+    "based_on": "Coaching is based on all {filled} filled trades so far (all sessions).",
+    "expectancy": "Expectancy",
+    "max_streak": "Max losing streak",
+    "avg_win": "Avg win",
+    "avg_loss": "Avg loss",
+    "split_detector": "By setup (detector)",
+    "split_side": "Long / short",
+    "split_confidence": "By confidence",
+    "group": "Group",
+    "verdict": "Verdict",
+    "verdict_positive": "positive",
+    "verdict_negative": "negative",
+    "verdict_not_enough_data": "not enough data",
+    "all_rules": "All coaching rules",
+    "status_ok": "OK",
+    "status_work_on": "work on this",
+    "status_not_enough_data": "not enough data",
+    "sessions": "Sessions",
+    "chart_expectancy": "Expectancy per session (R per trade)",
+    "chart_plan": "Plan quality per session (% of trades passing all 3 checks)",
+    "no_sessions": "No sessions logged yet.",
+    "date": "Date",
+    "close": "Close",
+    "back": "Back",
+    "export": "Export for review",
+    "exported": "Saved: {path}",
+    "exporting": "Exporting…",
+    "side": "Direction",
+    "side_both": "Long and short",
+    "side_long": "Long only",
+    "side_short": "Short only",
+    "lang_toggle": "FR",
+    "coach": {
+      "quick_stops": {
+        "title": "Stops too tight",
+        "detail": "{quick} of {losses} losses hit the SL within {bars} bars.",
+        "advice": "Place the SL beyond the swing that the setup invalidates."
+      },
+      "giveback": {
+        "title": "Profits given back",
+        "detail": "{hits} of {trades} trades reached +{mfe}R but closed below +{close}R.",
+        "advice": "TP too far or no plan to manage: test a {target}R fixed target."
+      },
+      "weak_setup": {
+        "title": "Weak setup",
+        "detail": "{strong}: {strong_exp}R per trade. {weak}: {weak_exp}R per trade.",
+        "advice": "Drop the weak setup; drill the strong one only."
+      },
+      "confidence": {
+        "title": "Confidence not calibrated",
+        "detail": "Confidence 4-5: {high_exp}R per trade vs 1-2: {low_exp}R.",
+        "advice": "Write the reason before tagging confidence."
+      },
+      "missed": {
+        "title": "Too passive",
+        "detail": "{missed} of {skips} skips were missed opportunities.",
+        "advice": "Too passive on clear setups: review those charts."
+      },
+      "overtrade": {
+        "title": "Overtrading",
+        "detail": "You traded {traded} of {controls} no-trade rounds ({r}R).",
+        "advice": "Require two confluences before entry."
+      },
+      "against_bias": {
+        "title": "Trading against the H1 bias",
+        "detail": "Against bias: {against_exp}R per trade vs with bias: {with_exp}R.",
+        "advice": "Trade only with the H1 bias for the next 3 sessions."
+      }
+    },
+    "phase_progress": "All-time progress"
   },
   "fr": {
     "title": "Entraîneur NAS100",
@@ -207,7 +286,7 @@
       "against": "Contre H1",
       "none": "Sans biais"
     },
-    "help": "Heures de New York (ET) · 1/2/3 unité de temps · L/S/K décider · glisser les lignes ou saisir les prix · M marché · T setup · B biais · Maj+1-5 confiance · / note · Entrée valider · I idéal · D sombre/clair",
+    "help": "Heures de New York (ET) · 1/2/3 unité de temps · L/S/K décider · glisser les lignes ou saisir les prix · M marché · T setup · B biais · Maj+1-5 confiance · / note · Entrée valider · I idéal · D sombre/clair · G langue",
     "theme_dark": "Sombre",
     "theme_light": "Clair",
     "ideal": "Setup idéal (a posteriori)",
@@ -215,6 +294,85 @@
     "show_ideal": "Afficher l'idéal",
     "hide_ideal": "Masquer l'idéal",
     "setup_context": "Setup et contexte au gel",
-    "you_skipped": "Vous avez passé"
+    "you_skipped": "Vous avez passé",
+    "tab_session": "Cette session",
+    "tab_alltime": "Historique",
+    "progress": "Progression globale",
+    "work_on": "À travailler",
+    "r_lost": "R perdus",
+    "not_enough_data": "pas assez de données",
+    "need_more": "{sample}/{need} trades",
+    "nothing_flagged": "Aucune règle déclenchée. Continue l'entraînement.",
+    "all_not_enough": "Pas encore assez de données : les règles demandent {need} trades par échantillon (tu as {filled} trades exécutés au total).",
+    "based_on": "Le coaching se base sur les {filled} trades exécutés à ce jour (toutes sessions).",
+    "expectancy": "Espérance",
+    "max_streak": "Pire série de pertes",
+    "avg_win": "Gain moyen",
+    "avg_loss": "Perte moyenne",
+    "split_detector": "Par setup (détecteur)",
+    "split_side": "Achat / vente",
+    "split_confidence": "Par confiance",
+    "group": "Groupe",
+    "verdict": "Verdict",
+    "verdict_positive": "positive",
+    "verdict_negative": "négative",
+    "verdict_not_enough_data": "pas assez de données",
+    "all_rules": "Toutes les règles de coaching",
+    "status_ok": "OK",
+    "status_work_on": "à travailler",
+    "status_not_enough_data": "pas assez de données",
+    "sessions": "Sessions",
+    "chart_expectancy": "Espérance par session (R par trade)",
+    "chart_plan": "Qualité du plan par session (% de trades qui passent les 3 contrôles)",
+    "no_sessions": "Aucune session enregistrée.",
+    "date": "Date",
+    "close": "Fermer",
+    "back": "Retour",
+    "export": "Exporter pour revue",
+    "exported": "Enregistré : {path}",
+    "exporting": "Export…",
+    "side": "Direction",
+    "side_both": "Achat et vente",
+    "side_long": "Achat seulement",
+    "side_short": "Vente seulement",
+    "lang_toggle": "EN",
+    "coach": {
+      "quick_stops": {
+        "title": "Stops trop serrés",
+        "detail": "{quick} pertes sur {losses} ont touché le SL en {bars} bougies ou moins.",
+        "advice": "Place le SL au-delà du swing que le setup invalide."
+      },
+      "giveback": {
+        "title": "Gains rendus",
+        "detail": "{hits} trades sur {trades} ont atteint +{mfe}R mais ont clôturé sous +{close}R.",
+        "advice": "TP trop loin ou pas de plan de gestion : teste un objectif fixe à {target}R."
+      },
+      "weak_setup": {
+        "title": "Setup faible",
+        "detail": "{strong} : {strong_exp}R par trade. {weak} : {weak_exp}R par trade.",
+        "advice": "Abandonne le setup faible ; ne travaille que le fort."
+      },
+      "confidence": {
+        "title": "Confiance mal calibrée",
+        "detail": "Confiance 4-5 : {high_exp}R par trade contre 1-2 : {low_exp}R.",
+        "advice": "Écris la raison avant de noter ta confiance."
+      },
+      "missed": {
+        "title": "Trop passif",
+        "detail": "{missed} passes sur {skips} étaient des occasions manquées.",
+        "advice": "Trop passif sur des setups clairs : revois ces graphiques."
+      },
+      "overtrade": {
+        "title": "Surtrading",
+        "detail": "Tu as tradé {traded} rounds sans setup sur {controls} ({r}R).",
+        "advice": "Exige deux confluences avant d'entrer."
+      },
+      "against_bias": {
+        "title": "Trades contre le biais H1",
+        "detail": "Contre le biais : {against_exp}R par trade, avec le biais : {with_exp}R.",
+        "advice": "Ne trade qu'avec le biais H1 pendant les 3 prochaines sessions."
+      }
+    },
+    "phase_progress": "Progression globale"
   }
 }

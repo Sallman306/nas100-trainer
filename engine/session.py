@@ -14,7 +14,8 @@ from engine.grading import grade_skip, plan_checks
 from engine.market import CHART_TFS, ChartClock, MarketData, timeout_utc
 from engine.picker import plan_session
 from engine.replay import Order, simulate
-from engine.report import session_stats
+from engine.feedback import progress_report, session_report
+from engine.holding import bars_held
 from engine.ideal import ideal_setup
 from engine.story import Story, market_story
 from engine.trade_story import TradeStory, skip_story, trade_story
@@ -83,6 +84,7 @@ class Practice:
         self.sessions: dict[str, Session] = {}
         self.rounds: dict[str, Round] = {}
         self.by_id = market.scenarios.set_index("scenario_id", drop=False)
+        self._held: dict[tuple[str, str], int | None] = {}
 
     # ----- sessions and rounds -----
     def new_session(self, drill: str | None = None, rounds: int | None = None) -> Session:
@@ -189,11 +191,29 @@ class Practice:
         return jsonable(result)
 
     def report(self, session_id: str) -> dict:
-        """Logged rounds of a session and their basic stats."""
-        rows = read_rows(self.cfg.log_file, session_id)
+        """Session report: stats, splits, and coaching from the all-time log."""
+        all_rows = self._rows()
+        rows = [r for r in all_rows if r["session_id"] == session_id]
         if not rows and session_id not in self.sessions:
             raise RoundError("unknown session", 404)
-        return {"session_id": session_id, "stats": jsonable(session_stats(rows)), "rows": rows}
+        rep = session_report(rows, all_rows, self.cfg.feedback)
+        return jsonable({"session_id": session_id, **rep, "rows": rows})
+
+    def progress(self) -> dict:
+        """All-time tab: every logged session."""
+        return jsonable(progress_report(self._rows(), self.cfg.feedback))
+
+    def _rows(self) -> list[dict]:
+        """All logged rows, each with "bars_held" (cached) for the quick-stop rule."""
+        rows = read_rows(self.cfg.log_file)
+        for r in rows:
+            key = (r["session_id"], r["round"])
+            if key not in self._held:
+                scen = self.by_id.loc[r["scenario_id"]] if r["scenario_id"] in self.by_id.index else None
+                self._held[key] = None if scen is None else bars_held(
+                    r, scen, self.market, self.cfg.spread, self.cfg.timeout, self.cfg.tz)
+            r["bars_held"] = self._held[key]
+        return rows
 
     def _order(self, decision: str, form: dict, close: float) -> Order:
         """Build and validate the order; market orders use the freeze close as entry."""

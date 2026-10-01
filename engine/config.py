@@ -9,6 +9,7 @@ import yaml
 
 from data_io.settings import DEFAULT_CONFIG, _parse_time
 from data_io.timeconv import ServerClock
+from engine.feedback import FeedbackConfig
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class PracticeConfig:
     fake_date: date = date(2000, 1, 3)
     log_file: Path = Path("logs/trades.csv")
     server_clock: ServerClock = ServerClock()
+    feedback: FeedbackConfig = FeedbackConfig()
 
 
 def load_practice_config(path: Path | str = DEFAULT_CONFIG) -> PracticeConfig:
@@ -55,4 +57,25 @@ def load_practice_config(path: Path | str = DEFAULT_CONFIG) -> PracticeConfig:
         log_file=log_file,
         server_clock=ServerClock(raw.get("server_time", {}).get("mode", "ny_plus_7"),
                                  float(raw.get("server_time", {}).get("fixed_offset_hours", 2))),
+        feedback=_feedback(raw.get("feedback", {}), float(out.get("target_r", d.target_r))),
+    )
+
+
+def _feedback(fb: dict, target_r: float) -> FeedbackConfig:
+    """Coaching thresholds from the "feedback" section (missing keys keep defaults)."""
+    d = FeedbackConfig()
+    return FeedbackConfig(
+        min_trades=int(fb.get("min_trades", d.min_trades)),
+        top_items=int(fb.get("top_items", d.top_items)),
+        quick_stop_bars=int(fb.get("quick_stop_bars", d.quick_stop_bars)),
+        quick_stop_share=float(fb.get("quick_stop_share", d.quick_stop_share)),
+        giveback_mfe_r=float(fb.get("giveback_mfe_r", d.giveback_mfe_r)),
+        giveback_close_r=float(fb.get("giveback_close_r", d.giveback_close_r)),
+        giveback_share=float(fb.get("giveback_share", d.giveback_share)),
+        fixed_target_r=float(fb.get("fixed_target_r", d.fixed_target_r)),
+        missed_share=float(fb.get("missed_share", d.missed_share)),
+        overtrade_share=float(fb.get("overtrade_share", d.overtrade_share)),
+        high_confidence=tuple(int(x) for x in fb.get("high_confidence", d.high_confidence)),
+        low_confidence=tuple(int(x) for x in fb.get("low_confidence", d.low_confidence)),
+        target_r=target_r,
     )

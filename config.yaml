@@ -67,3 +67,18 @@ practice:
     H1: 15
   fake_date: "2000-01-03"     # charts are shifted to this date so the real date stays hidden
   log_file: logs/trades.csv
+
+# ---------- Phase 4: feedback / coaching rules ----------
+feedback:
+  min_trades: 20              # no verdict on a sample smaller than this ("not enough data")
+  top_items: 3                # "work on this" items in the report
+  quick_stop_bars: 3          # rule: losses hit the SL within N M5 bars ...
+  quick_stop_share: 0.5       # ... for at least this share of losses
+  giveback_mfe_r: 2.0         # rule: MFE >= X R ...
+  giveback_close_r: 1.0       # ... but closed below Y R ...
+  giveback_share: 0.2         # ... on at least this share of trades
+  fixed_target_r: 2.0         # the fixed target the give-back advice suggests
+  missed_share: 0.5           # rule: missed opportunities / skips >= this
+  overtrade_share: 0.5        # rule: trades taken / no-trade rounds >= this
+  high_confidence: [4, 5]
+  low_confidence: [1, 2]

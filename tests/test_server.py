@@ -101,6 +101,15 @@ def test_full_session_logs_every_round(setup) -> None:
 
     rep = client.get(f"/api/session/{sid}/report").json()
     assert rep["stats"]["rounds"] == 4 and rep["stats"]["trades"] == 3 and rep["stats"]["skips"] == 1
+    assert {"detector", "side", "confidence"} == set(rep["splits"])
+    assert len(rep["coaching"]["rules"]) == 7 and rep["coaching"]["work_on"] == []  # < 20 trades
+    assert {r["status"] for r in rep["coaching"]["rules"]} == {"not_enough_data"}
+    held = [r["bars_held"] for r in rep["rows"]]
+    assert held[2] is None and all(h is None or h >= 1 for h in held)
+    assert any(h is not None for h in held[:2] + held[3:])
+
+    prog = client.get("/api/progress").json()
+    assert [p["session_id"] for p in prog["sessions"]] == [sid] and prog["stats"]["rounds"] == 4
 
 
 def test_double_submit_and_bad_input(setup) -> None:
