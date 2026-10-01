@@ -32,7 +32,7 @@ class DetectConfig:
     seed: int = 7
     horizon_bars: int = 120
     stop_atr: float = 1.0
-    target_r: float = 2.0
+    target_r: float = 3.0
     h1_fast: int = 20
     h1_slow: int = 50
     h1_flat_atr: float = 0.1

@@ -15,6 +15,7 @@ from engine.market import CHART_TFS, ChartClock, MarketData, timeout_utc
 from engine.picker import plan_session
 from engine.replay import Order, simulate
 from engine.report import session_stats
+from engine.ideal import ideal_setup
 from engine.story import Story, market_story
 from engine.trade_story import TradeStory, skip_story, trade_story
 from engine.tradelog import append_row, played_ids, read_rows
@@ -148,10 +149,10 @@ class Practice:
         row = self._base_row(rnd, form)
         result: dict = {"decision": decision}
         story = market_story(s, self.market.history("M5", freeze, cfg.history_days.get("M5", 2)),
-                             self.market.after("M5", freeze, end), cfg.tz)
+                             self.market.after("M5", freeze, end), cfg.tz, cfg.target_r)
         if decision == "skip":
             row.update(exit_reason=grade_skip(s), result_r=0.0, entry=None, sl=None, tp=None)
-            mine = skip_story(s, story)
+            mine = skip_story(s, story, cfg.target_r)
         else:
             price = round(float(s["close"]), 2)  # the price the user saw
             order = self._order(decision, form, price)
@@ -170,6 +171,14 @@ class Practice:
             mine = trade_story(s, order, trade, checks, story, self.market.bars["M1"],
                                self.market.freeze_end(freeze), end, cfg.tz)
         result["explain"] = self._explain(story, mine, ChartClock(freeze, cfg.tz, cfg.fake_date))
+        m1 = self.market.bars["M1"]
+        after_m1 = m1[(m1["time_utc"] >= self.market.freeze_end(freeze)) & (m1["time_utc"] < end)]
+        ideal = ideal_setup(s, after_m1, self.market.history("M5", freeze, cfg.history_days.get("M5", 2)),
+                            cfg.spread, cfg.swing_bars, cfg.target_r, cfg.tz, self.market.after("M5", freeze, end))
+        when = ideal.pop("entry_time_utc", None)
+        ideal["entry_time"] = ChartClock(freeze, cfg.tz, cfg.fake_date).to_chart(when) if when is not None else None
+        result["explain"]["ideal"] = ideal
+        result["target_r"] = cfg.target_r
         append_row(cfg.log_file, row)
         result.update({k: row.get(k) for k in ("result_r", "exit_reason", "filled", "rr_planned", "mfe_r", "mae_r",
                                                 "sl_beyond_swing", "rr_ok", "with_bias", "best_possible_r")})

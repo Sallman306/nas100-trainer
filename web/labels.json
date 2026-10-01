@@ -78,15 +78,35 @@
     "invalid_long": "Long needs SL < entry < TP",
     "invalid_short": "Short needs TP < entry < SL",
     "reasons": {
-      "tp": "Take profit", "sl": "Stop loss", "timeout": "Time-out (17:00)", "not_filled": "Not filled",
-      "correct_skip": "Correct skip", "missed_opportunity": "Missed opportunity"
+      "tp": "Take profit",
+      "sl": "Stop loss",
+      "timeout": "Time-out (17:00)",
+      "not_filled": "Not filled",
+      "correct_skip": "Correct skip",
+      "missed_opportunity": "Missed opportunity"
     },
     "setups": {
-      "sweep": "Liquidity sweep", "bos": "Displacement / BOS", "orb": "Opening range break",
-      "fvg_retest": "FVG retest", "no_trade": "No trade", "other": "Other"
+      "sweep": "Liquidity sweep",
+      "bos": "Displacement / BOS",
+      "orb": "Opening range break",
+      "fvg_retest": "FVG retest",
+      "no_trade": "No trade",
+      "other": "Other"
     },
-    "biases": { "with": "With H1", "against": "Against H1", "none": "No bias" },
-    "help": "Times are New York (ET) · 1/2/3 timeframe · L/S/K decide · drag lines or type prices · M market · T setup · B bias · Shift+1-5 confidence · / note · Enter commit"
+    "biases": {
+      "with": "With H1",
+      "against": "Against H1",
+      "none": "No bias"
+    },
+    "help": "Times are New York (ET) · 1/2/3 timeframe · L/S/K decide · drag lines or type prices · M market · T setup · B bias · Shift+1-5 confidence · / note · Enter commit · I ideal · D dark/light",
+    "theme_dark": "Dark",
+    "theme_light": "Light",
+    "ideal": "Ideal setup (hindsight)",
+    "ideal_short": "Ideal",
+    "show_ideal": "Show ideal on chart",
+    "hide_ideal": "Hide ideal",
+    "setup_context": "Setup & context at the freeze",
+    "you_skipped": "You skipped"
   },
   "fr": {
     "title": "Entraîneur NAS100",
@@ -167,14 +187,34 @@
     "invalid_long": "Achat : SL < entrée < TP",
     "invalid_short": "Vente : TP < entrée < SL",
     "reasons": {
-      "tp": "Objectif atteint", "sl": "Stop touché", "timeout": "Fin de temps (17:00)", "not_filled": "Non exécuté",
-      "correct_skip": "Bonne passe", "missed_opportunity": "Occasion manquée"
+      "tp": "Objectif atteint",
+      "sl": "Stop touché",
+      "timeout": "Fin de temps (17:00)",
+      "not_filled": "Non exécuté",
+      "correct_skip": "Bonne passe",
+      "missed_opportunity": "Occasion manquée"
     },
     "setups": {
-      "sweep": "Prise de liquidité", "bos": "Déplacement / BOS", "orb": "Cassure du range d'ouverture",
-      "fvg_retest": "Retest de FVG", "no_trade": "Pas de trade", "other": "Autre"
+      "sweep": "Prise de liquidité",
+      "bos": "Déplacement / BOS",
+      "orb": "Cassure du range d'ouverture",
+      "fvg_retest": "Retest de FVG",
+      "no_trade": "Pas de trade",
+      "other": "Autre"
     },
-    "biases": { "with": "Avec H1", "against": "Contre H1", "none": "Sans biais" },
-    "help": "Heures de New York (ET) · 1/2/3 unité de temps · L/S/K décider · glisser les lignes ou saisir les prix · M marché · T setup · B biais · Maj+1-5 confiance · / note · Entrée valider"
+    "biases": {
+      "with": "Avec H1",
+      "against": "Contre H1",
+      "none": "Sans biais"
+    },
+    "help": "Heures de New York (ET) · 1/2/3 unité de temps · L/S/K décider · glisser les lignes ou saisir les prix · M marché · T setup · B biais · Maj+1-5 confiance · / note · Entrée valider · I idéal · D sombre/clair",
+    "theme_dark": "Sombre",
+    "theme_light": "Clair",
+    "ideal": "Setup idéal (a posteriori)",
+    "ideal_short": "Idéal",
+    "show_ideal": "Afficher l'idéal",
+    "hide_ideal": "Masquer l'idéal",
+    "setup_context": "Setup et contexte au gel",
+    "you_skipped": "Vous avez passé"
   }
 }

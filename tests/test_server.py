@@ -78,7 +78,7 @@ def test_full_session_logs_every_round(setup) -> None:
         sid = r["session_id"]
         p, a = r["price"], r["atr"]
         sign = 1 if decision == "long" else -1
-        form = {"decision": decision, "order_type": "market", "sl": p - sign * a, "tp": p + sign * 2 * a,
+        form = {"decision": decision, "order_type": "market", "sl": p - sign * a, "tp": p + sign * 3 * a,
                 "setup_tag": "sweep", "bias_tag": "with", "confidence": 4, "note": "test", "tf_used": ["M5", "H1"]}
         res = client.post(f"/api/round/{r['round_id']}/submit", json=form)
         assert res.status_code == 200, res.text

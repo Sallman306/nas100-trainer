@@ -14,6 +14,12 @@ const EVENT_COLORS = { level: "#8e44ad", extreme: "#0050ef", candle: "#e08a00", 
 const SPEED_MS = { 1: 600, 5: 120 };
 const DRAG_PX = 8;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CHART_THEMES = {
+  light: { layout: { background: { color: "#ffffff" }, textColor: "#222" },
+    grid: { vertLines: { color: "#eeeeee" }, horzLines: { color: "#eeeeee" } } },
+  dark: { layout: { background: { color: "#161618" }, textColor: "#cfcfcf" },
+    grid: { vertLines: { color: "#262628" }, horzLines: { color: "#262628" } } },
+};
 
 const S = {
   L: null, lang: "en", meta: null,
@@ -22,7 +28,7 @@ const S = {
   tf: "M5", tfUsed: new Set(), decision: null, orderType: "market",
   lines: { entry: null, sl: null, tp: null }, priceLines: {}, levelLines: [], extraLines: [],
   confidence: 3, speed: loadSpeed(), replayTimer: null, replayIndex: 0, result: null, markers: [],
-  dragging: null, nowTime: null,
+  dragging: null, nowTime: null, theme: loadTheme(), showIdeal: false, idealLines: [],
 };
 
 // ---------- helpers ----------
@@ -30,6 +36,7 @@ function loadSpeed() {
   try { const v = Number(localStorage.getItem("speed")); return [0, 1, 5].includes(v) ? v : 5; } catch { return 5; }
 }
 function saveSpeed(v) { try { localStorage.setItem("speed", String(v)); } catch { /* ignore */ } }
+function loadTheme() { try { return localStorage.getItem("theme") === "dark" ? "dark" : "light"; } catch { return "light"; } }
 function t(key) { return (S.L && S.L[key]) || key; }
 function fmt(x, d = 2) { return x === null || x === undefined || Number.isNaN(Number(x)) ? "–" : Number(x).toFixed(d); }
 function fmtR(x) { return x === null || x === undefined ? "–" : (x > 0 ? "+" : "") + Number(x).toFixed(2) + "R"; }
@@ -80,6 +87,14 @@ const series = chart.addCandlestickSeries({
   upColor: "#2e9e5b", downColor: "#e0413c", borderUpColor: "#1f7a43", borderDownColor: "#b22a26",
   wickUpColor: "#1f7a43", wickDownColor: "#b22a26",
 });
+
+function applyTheme(name) {
+  S.theme = name;
+  document.documentElement.dataset.theme = name;
+  chart.applyOptions(CHART_THEMES[name]);
+  $("btnTheme").innerHTML = `${name === "dark" ? "☀ " + t("theme_light") : "🌙 " + t("theme_dark")} <kbd>D</kbd>`;
+  try { localStorage.setItem("theme", name); } catch { /* ignore */ }
+}
 
 chart.subscribeCrosshairMove((param) => {
   $("clockCursor").textContent = param.time
@@ -145,10 +160,11 @@ function clearExtraLines() {
 // ---------- risk / reward zones (redrawn every frame so they follow pan/zoom) ----------
 function drawZones() {
   const rw = $("zoneReward"), rk = $("zoneRisk");
-  const { entry, sl, tp } = S.lines;
-  const show = S.round && S.decision && S.decision !== "skip" && entry !== null && sl !== null && tp !== null;
+  const ideal = S.showIdeal && S.result ? S.result.explain.ideal : null;
+  const { entry, sl, tp } = ideal || S.lines;
+  const show = S.round && (ideal || (S.decision && S.decision !== "skip")) && entry !== null && sl !== null && tp !== null;
   if (!show) { rw.hidden = true; rk.hidden = true; return; }
-  const x0 = chart.timeScale().timeToCoordinate(S.round.freeze_time);
+  const x0 = chart.timeScale().timeToCoordinate((ideal && ideal.entry_time) || S.round.freeze_time);
   const right = $("chart").clientWidth - chart.priceScale("right").width();
   const left = Math.max(0, x0 === null ? 0 : x0);
   const y = (p) => series.priceToCoordinate(p);
@@ -302,7 +318,7 @@ async function nextRound() {
   S.decision = null; S.orderType = "market"; S.lines = { entry: null, sl: null, tp: null };
   S.tfUsed = new Set(); S.markers = [];
   setPhase("decide");
-  series.setMarkers([]); clearExtraLines();
+  series.setMarkers([]); clearExtraLines(); S.showIdeal = false; drawIdeal();
   drawTradeLines(); drawLevels();
   $("zoneReward").classList.remove("flash"); $("zoneRisk").classList.remove("flash");
   $("resultPanel").hidden = true; $("decidePanel").hidden = false; $("side").classList.remove("wide");
@@ -408,46 +424,78 @@ function finishRound() {
   renderResult();
 }
 
-function list(items) { return `<ul class="bullets">${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`; }
-function group(title, body) { return `<fieldset class="group"><legend>${esc(title)}</legend>${body}</fieldset>`; }
+const TONES = ["good", "bad", "warn", "info"];
+function blist(items) {
+  return `<ul class="blist">${items.map((b) => `<li class="${TONES.includes(b.tone) ? b.tone : "info"}">${esc(b.text)}</li>`).join("")}</ul>`;
+}
+function sect(title, body, open) {
+  return `<details class="sect"${open ? " open" : ""}><summary>${esc(title)}</summary><div class="sect-body">${body}</div></details>`;
+}
 
 function renderResult() {
-  const r = S.result, x = r.explain;
+  const r = S.result, x = r.explain, ideal = x.ideal;
   const isTrade = r.decision !== "skip";
-  const cls = !isTrade ? (r.exit_reason === "correct_skip" ? "pos" : "neg") : r.result_r > 0 ? "pos" : r.result_r < 0 ? "neg" : "flat";
+  const good = isTrade ? r.result_r > 0 : r.exit_reason === "correct_skip";
+  const cls = isTrade && r.result_r === 0 ? "flat" : good ? "pos" : "neg";
   const headline = isTrade ? fmtR(r.result_r) : S.L.reasons[r.exit_reason];
-  const setup = S.L.setups[r.detector] || r.detector;
+  const sub = isTrade ? `${S.L.reasons[r.exit_reason] || r.exit_reason} · R:R ${fmt(r.rr_planned, 1)}` : t("you_skipped");
   const dir = r.direction_hint && r.direction_hint !== "none" ? ` → ${r.direction_hint.toUpperCase()}` : "";
-  const check = (key) => (r[key] === null || r[key] === undefined ? "" : `<div class="${r[key] ? "ok" : "ko"}">${t(key)}</div>`);
-  const facts = [
-    [t("decision"), `${r.decision.toUpperCase()}${isTrade ? ` (${r.order_type})` : ""}`],
-    [t("exit_reason"), S.L.reasons[r.exit_reason] || r.exit_reason],
-    ...(isTrade && r.filled ? [["Fill / exit", `${fmt(r.fill_price)} → ${fmt(r.exit_price)}`],
-      ["MFE / MAE", `${fmtR(r.mfe_r)} / -${fmt(r.mae_r)}R`]] : []),
-    [t("best"), `${r.best_side.toUpperCase()} ${fmtR(r.best_possible_r)}`],
-    [t("detector"), `<b>${esc(setup)}</b>${dir}`],
+  const idealTxt = ideal.decision === "skip" ? "SKIP" : `${ideal.side.toUpperCase()} ${fmtR(ideal.r)}`;
+  const chips = [
+    [t("detector"), (S.L.setups[r.detector] || r.detector) + dir],
+    [t("ideal_short"), idealTxt],
     [t("h1_trend"), String(r.h1_trend).toUpperCase()],
-    [t("real_time"), `${r.freeze_time_ny}, ${t("frozen_at").toLowerCase()} ${r.freeze_close_ny} ET`],
+    [t("real_time"), `${r.freeze_time_ny} ${r.freeze_close_ny}`],
   ];
-  const timeline = x.events.map((e) =>
-    `<li class="${e.kind}" data-time="${e.time}">${esc(e.text)}</li>`).join("");
+  const check = (key) => ({ tone: r[key] ? "good" : "bad", text: t(key) });
+  const timeline = x.events.map((e) => `<li class="${e.kind}" data-time="${e.time}">${esc(e.text)}</li>`).join("");
   $("resultBody").innerHTML = [
     `<fieldset class="group"><legend>${t("result")}</legend>
-      <div class="result-head"><span class="big-r ${cls}">${esc(headline)}</span>
-      ${isTrade ? `<span>R:R ${fmt(r.rr_planned)}</span>` : ""}</div>
-      <div class="facts">${facts.map(([k, v]) => `<span>${esc(k)}</span><span>${v}</span>`).join("")}</div></fieldset>`,
+      <div class="result-head"><span class="big-r ${cls}">${esc(headline)}</span><span>${esc(sub)}</span></div>
+      <div class="chips">${chips.map(([k, v]) => `<span class="chip">${esc(k)}<b>${esc(v)}</b></span>`).join("")}</div>
+    </fieldset>`,
     `<div class="lesson">${esc(x.lesson)}</div>`,
-    group(t("your_trade"), list(x.trade)),
-    group(t("why"), list(x.why)),
-    group(t("timeline"), `<ul class="timeline">${timeline}</ul><div class="hint">${t("timeline_hint")}</div>`),
-    group(t("trigger"), `<div>${esc(x.trigger)}</div>`),
-    group(t("context"), list(x.context)),
-    isTrade ? group(`${t("plan")} (R:R ${fmt(r.rr_planned)})`, check("rr_ok") + check("sl_beyond_swing") + check("with_bias")) : "",
+    sect(t("your_trade"), blist(x.trade), true),
+    sect(t("ideal"), blist(ideal.points) +
+      `<button id="btnIdeal" class="xp-btn small">${S.showIdeal ? t("hide_ideal") : t("show_ideal")} <kbd>I</kbd></button>`, true),
+    sect(t("why"), blist(x.why), true),
+    sect(t("timeline"), `<ul class="timeline">${timeline}</ul><div class="sub-hint">${t("timeline_hint")}</div>`, false),
+    sect(t("setup_context"), `<div>${esc(x.trigger)}</div>` + blist(x.context)
+      + (isTrade ? `<div class="sub-hint">${t("plan")}</div>` + blist(["rr_ok", "sl_beyond_swing", "with_bias"].map(check)) : ""), false),
   ].join("");
   $("resultBody").scrollTop = 0;
   $("resultBody").querySelectorAll(".timeline li").forEach((li) => { li.onclick = () => focusTime(Number(li.dataset.time)); });
+  $("btnIdeal").onclick = toggleIdeal;
   $("btnNext").innerHTML = `${r.session_done ? t("to_report") : t("next")} <kbd>Enter</kbd>`;
   $("resultPanel").hidden = false; $("decidePanel").hidden = true; $("side").classList.add("wide");
+}
+
+// ---------- ideal setup overlay ----------
+function toggleIdeal() {
+  if (S.phase !== "result") return;
+  S.showIdeal = !S.showIdeal;
+  drawIdeal();
+  const b = $("btnIdeal");
+  if (b) b.innerHTML = `${S.showIdeal ? t("hide_ideal") : t("show_ideal")} <kbd>I</kbd>`;
+}
+
+function drawIdeal() {
+  S.idealLines.forEach((l) => series.removePriceLine(l));
+  S.idealLines = [];
+  // the user's own lines step back while the ideal one is shown
+  for (const k of ["entry", "sl", "tp"]) {
+    if (S.priceLines[k]) S.priceLines[k].applyOptions({ lineVisible: !S.showIdeal, axisLabelVisible: !S.showIdeal });
+  }
+  if (!S.showIdeal || !S.result) return;
+  const id = S.result.explain.ideal;
+  const tag = id.decision === "skip" ? " (skip)" : "";
+  const mk = (price, color, title) => series.createPriceLine({ price, color, lineWidth: 3,
+    lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title });
+  S.idealLines = [
+    mk(id.entry, "#8e44ad", `IDEAL ${id.kind === "wait" ? "WAIT → " : ""}${id.side.toUpperCase()}${tag}`),
+    mk(id.sl, "#e00000", "IDEAL SL"),
+    mk(id.tp, "#00d000", `IDEAL TP ${fmtR(id.r)}`),
+  ];
 }
 
 function focusTime(time) {
@@ -527,6 +575,8 @@ document.addEventListener("keydown", (e) => {
     b: () => S.phase === "decide" && cycleSelect("selBias"),
     "/": () => { if (S.phase === "decide") { e.preventDefault(); $("inNote").focus(); } },
     z: () => setSpeed(1), x: () => setSpeed(5), c: () => setSpeed(0),
+    d: () => applyTheme(S.theme === "dark" ? "light" : "dark"),
+    i: () => toggleIdeal(),
   };
   if (actions[key]) actions[key]();
 });
@@ -540,12 +590,14 @@ $("btnSkip").onclick = () => decide("skip");
 $("btnMarket").onclick = setMarket;
 $("btnCommit").onclick = commit;
 $("btnNext").onclick = advance;
+$("btnTheme").onclick = () => applyTheme(S.theme === "dark" ? "light" : "dark");
 $("inEntry").addEventListener("input", (e) => onPriceInput("entry", e.target.value));
 $("inSl").addEventListener("input", (e) => onPriceInput("sl", e.target.value));
 $("inTp").addEventListener("input", (e) => onPriceInput("tp", e.target.value));
 
 (async () => {
   await loadLabels();
+  applyTheme(S.theme);
   document.querySelectorAll("#confRow [data-conf]").forEach((b) => { b.onclick = () => setConfidence(Number(b.dataset.conf)); });
   setConfidence(3); setSpeed(S.speed); showOrderInputs(false);
   $("clockCursor").textContent = `${t("cursor")}: –`;

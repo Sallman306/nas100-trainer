@@ -1,9 +1,8 @@
-"""Rule-based explanation of a round: the context at the freeze, what triggered the
-setup, what price did afterwards (timeline) and why the main move happened.
+"""Rule-based explanation of a round: context at the freeze, what the setup was,
+what price did afterwards (timeline) and why the big move happened.
 
-Everything is derived from bars and levels; no AI, no guessing beyond simple rules.
-Before-freeze facts use bars up to the freeze; after-freeze facts are only shown
-once the round is committed.
+Bullets are short and carry a tone (good / bad / warn / info) so the page can show
+them as ✔ / ✖ / ⚠ / • lines. Everything comes from bars and levels; no AI.
 """
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ import pandas as pd
 LEVEL_LABELS = {
     "asian_high": "Asian high", "asian_low": "Asian low",
     "london_high": "London high", "london_low": "London low",
-    "pdh": "previous-day high (PDH)", "pdl": "previous-day low (PDL)",
+    "pdh": "previous-day high", "pdl": "previous-day low",
     "or_high": "opening-range high", "or_low": "opening-range low",
 }
 SHORT_LEVELS = {
@@ -23,15 +22,21 @@ SHORT_LEVELS = {
     "pdh": "PDH", "pdl": "PDL", "or_high": "OR H", "or_low": "OR L",
 }
 SETUP_NAMES = {
-    "sweep": "liquidity sweep", "bos": "displacement / BOS", "orb": "opening-range break",
-    "fvg_retest": "FVG retest", "no_trade": "no-trade",
+    "sweep": "Liquidity sweep", "bos": "Displacement / BOS", "orb": "Opening-range break",
+    "fvg_retest": "FVG retest", "no_trade": "No setup",
 }
 SPECIAL_TIMES = {
-    "08:30": "08:30 ET – a typical US data-release time (CPI, jobs, claims)",
-    "09:30": "09:30 ET – the US cash open",
-    "09:35": "09:35 ET – the first minutes after the cash open",
-    "10:00": "10:00 ET – a typical US data-release time (ISM, sentiment)",
+    "08:30": "08:30 (US data release time)",
+    "09:30": "09:30 (cash open)",
+    "09:35": "09:35 (just after the cash open)",
+    "10:00": "10:00 (US data release time)",
 }
+CHOP_ATR = 1.5
+
+
+def bullet(tone: str, text: str) -> dict:
+    """One display line; tone is good | bad | warn | info."""
+    return {"tone": tone, "text": text}
 
 
 @dataclass
@@ -40,19 +45,19 @@ class Event:
 
     time_utc: pd.Timestamp
     text: str
-    kind: str  # level | extreme | candle | move
+    kind: str  # level | extreme | candle
     price: float = float("nan")
     label: str = ""  # short chart-marker text
 
 
 @dataclass
 class Story:
-    """Explanation pieces shown on the result card."""
+    """Explanation pieces shown on the result page."""
 
     trigger: str
-    context: list[str]
+    context: list[dict]
     events: list[Event]
-    why: list[str]
+    why: list[dict]
     main_dir: str            # up | down
     main_atr: float          # size of the main move in ATR
     levels_hit: dict[str, str] = field(default_factory=dict)  # level key -> "broke" | "rejected"
@@ -69,61 +74,41 @@ def scenario_levels(s: pd.Series) -> dict[str, float]:
 
 
 def trigger_text(s: pd.Series) -> str:
-    """What the detector saw at the freeze bar."""
-    det, d = s["detector"], s["direction_hint"]
+    """One sentence: what the detector saw at the freeze bar."""
+    det, d = s["detector"], str(s["direction_hint"]).upper()
     lvl = LEVEL_LABELS.get(str(s["level_name"]), str(s["level_name"]))
     price = s["level_price"]
     if det == "sweep":
-        side = "above" if d == "short" else "below"
-        back = "below" if d == "short" else "above"
-        pool = "buy-side" if d == "short" else "sell-side"
-        return (f"Liquidity sweep: price wicked {side} the {lvl} ({price:.2f}) and closed back {back} it. "
-                f"The stops resting {side} that level ({pool} liquidity) were taken, then price rejected – "
-                f"a reversal signal pointing {d.upper()}.")
+        side, back = ("above", "below") if d == "SHORT" else ("below", "above")
+        return f"Price wicked {side} the {lvl} ({price:.2f}) and closed back {back} it: stops were taken → reversal {d}."
     if det == "bos":
-        side = "high" if d == "long" else "low"
-        return (f"Displacement / break of structure: one candle with a body over 1.5× ATR closed beyond the last "
-                f"swing {side} ({price:.2f}). Strong one-sided order flow – a continuation signal pointing {d.upper()}.")
+        side = "high" if d == "LONG" else "low"
+        return f"A big candle (body > 1.5 ATR) closed beyond the last swing {side} ({price:.2f}) → momentum {d}."
     if det == "orb":
-        size = s["or_high"] - s["or_low"]
-        side = "above the high" if d == "long" else "below the low"
-        return (f"Opening-range break: price closed {side} of the 09:30–09:45 range "
-                f"({s['or_low']:.2f}–{s['or_high']:.2f}, {size:.1f} pts) – a momentum signal pointing {d.upper()}.")
+        edge = f"above the high {s['or_high']:.2f}" if d == "LONG" else f"below the low {s['or_low']:.2f}"
+        return f"Price closed {edge} of the 09:30–09:45 opening range → momentum {d}."
     if det == "fvg_retest":
-        kind = "bullish" if d == "long" else "bearish"
-        return (f"Fair-value-gap retest: price came back for the first time into a {kind} gap "
-                f"({s['fvg_bottom']:.2f}–{s['fvg_top']:.2f}) left by a fast move earlier in the window. "
-                f"Such gaps often act as support/resistance – a signal pointing {d.upper()}.")
-    return ("No setup: none of the detectors (sweep, displacement, opening-range break, FVG retest) fired here. "
-            "This is a control round – the disciplined answer is usually to wait.")
+        return f"Price came back into a fair value gap ({s['fvg_bottom']:.2f}–{s['fvg_top']:.2f}) for the first time → {d}."
+    return "No setup fired here. This is a control round: waiting is usually right."
 
 
-def context_points(s: pd.Series, before: pd.DataFrame, tz: str) -> list[str]:
-    """Facts visible at the freeze: trend, volatility, session move, position vs levels."""
+def context_points(s: pd.Series, before: pd.DataFrame, tz: str, target_r: float) -> list[dict]:
+    """Facts visible at the freeze: trend, size of R, session move, nearest levels."""
     close, atr = float(s["close"]), float(s["atr"])
-    out = [f"H1 trend was {str(s['h1_trend']).upper()} (EMA 20 vs EMA 50 on H1). "
-           f"M5 ATR(14) = {atr:.1f} pts, so 1 ATR ≈ one normal 5-minute range."]
+    out = [bullet("info", f"H1 trend: {str(s['h1_trend']).upper()}"),
+           bullet("info", f"ATR (M5): {atr:.0f} pts → 1R ≈ {atr:.0f} pts, a big move ({target_r:.0f}R) ≈ {target_r * atr:.0f} pts")]
     ny = before["time_utc"].dt.tz_convert(tz)
-    today = before[ny.dt.date == s["freeze_time_utc"].tz_convert(tz).date()]
-    from_8 = today[today["time_utc"].dt.tz_convert(tz).dt.strftime("%H:%M") >= "08:00"]
-    if len(from_8):
-        move = close - float(from_8["open"].iloc[0])
-        out.append(f"Since 08:00 ET price had moved {move:+.1f} pts ({move / atr:+.1f} ATR) into the freeze.")
+    today = before[(ny.dt.date == s["freeze_time_utc"].tz_convert(tz).date()) & (ny.dt.strftime("%H:%M") >= "08:00")]
+    if len(today):
+        move = close - float(today["open"].iloc[0])
+        out.append(bullet("info", f"Move since 08:00: {move:+.0f} pts ({move / atr:+.1f} ATR)"))
     levels = scenario_levels(s)
-    above = sorted(((p - close, k) for k, p in levels.items() if p > close))
-    below = sorted(((close - p, k) for k, p in levels.items() if p < close))
-    if above:
-        d, k = above[0]
-        out.append(f"Nearest level above: {LEVEL_LABELS[k]} at {levels[k]:.2f} ({d:.1f} pts / {d / atr:.1f} ATR away) – "
-                   f"buy stops cluster there.")
-    else:
-        out.append("Price was above every key level – no obvious overhead liquidity (open air).")
-    if below:
-        d, k = below[0]
-        out.append(f"Nearest level below: {LEVEL_LABELS[k]} at {levels[k]:.2f} ({d:.1f} pts / {d / atr:.1f} ATR away) – "
-                   f"sell stops cluster there.")
-    else:
-        out.append("Price was below every key level – no obvious liquidity underneath.")
+    above = sorted((p - close, k) for k, p in levels.items() if p > close)
+    below = sorted((close - p, k) for k, p in levels.items() if p < close)
+    out.append(bullet("info", f"Next level above: {LEVEL_LABELS[above[0][1]]} {levels[above[0][1]]:.2f} (+{above[0][0]:.0f} pts)"
+                      if above else "Next level above: none (open air)"))
+    out.append(bullet("info", f"Next level below: {LEVEL_LABELS[below[0][1]]} {levels[below[0][1]]:.2f} (−{below[0][0]:.0f} pts)"
+                      if below else "Next level below: none (open air)"))
     return out
 
 
@@ -141,106 +126,91 @@ def _level_events(s: pd.Series, after: pd.DataFrame, tz: str) -> tuple[list[Even
         closes = c[i:i + 4]
         broke = bool((closes > price).any()) if up else bool((closes < price).any())
         t = after["time_utc"].iloc[i]
-        verb = ("broke above" if up else "broke below") if broke else "tested and held"
-        short = SHORT_LEVELS[key] + (" broken" if broke else " held")
-        events.append(Event(t, f"{ny_hhmm(t, tz)} – price {verb} the {LEVEL_LABELS[key]} ({price:.2f}).", "level", price, short))
+        verb = "broke" if broke else "held"
+        events.append(Event(t, f"{ny_hhmm(t, tz)}  {LEVEL_LABELS[key]} {price:.2f} {verb}", "level", price,
+                            f"{SHORT_LEVELS[key]} {verb}"))
         hit[key] = "broke" if broke else "rejected"
     return events, hit
 
 
 def after_events(s: pd.Series, after: pd.DataFrame, tz: str) -> tuple[list[Event], dict[str, str]]:
-    """Timeline after the freeze: first 1-ATR move, level touches, biggest candle, extremes, close."""
+    """Timeline after the freeze: level touches, biggest candle, high, low, last close."""
     if after.empty:
         return [], {}
     close, atr = float(s["close"]), float(s["atr"])
     h, l, o, c = (after[k].to_numpy(float) for k in ("high", "low", "open", "close"))
     t = after["time_utc"]
     events, hit = _level_events(s, after, tz)
-    up_i = np.flatnonzero(h >= close + atr)
-    dn_i = np.flatnonzero(l <= close - atr)
-    first_up = int(up_i[0]) if up_i.size else len(h)
-    first_dn = int(dn_i[0]) if dn_i.size else len(h)
-    if min(first_up, first_dn) < len(h):
-        i = min(first_up, first_dn)
-        which = "both ways in the same candle" if first_up == first_dn else ("UP" if first_up < first_dn else "DOWN")
-        events.append(Event(t.iloc[i], f"{ny_hhmm(t.iloc[i], tz)} – first 1-ATR move from the freeze price went {which}.",
-                            "move", label="1 ATR " + ("up" if first_up < first_dn else "down" if first_dn < first_up else "both")))
     body = np.abs(c - o)
     b = int(body.argmax())
     tag = SPECIAL_TIMES.get(ny_hhmm(t.iloc[b], tz))
-    kind = "bullish" if c[b] > o[b] else "bearish"
-    events.append(Event(t.iloc[b], f"{ny_hhmm(t.iloc[b], tz)} – biggest candle of the replay: {kind}, body "
-                                   f"{body[b]:.1f} pts ({body[b] / atr:.1f} ATR)" + (f", at {tag}." if tag else "."), "candle",
-                        label=f"big {body[b] / atr:.1f} ATR"))
+    kind = "up" if c[b] > o[b] else "down"
+    events.append(Event(t.iloc[b], f"{ny_hhmm(t.iloc[b], tz)}  Biggest candle: {kind} {body[b]:.0f} pts ({body[b] / atr:.1f} ATR)"
+                        + (f" – {tag}" if tag else ""), "candle", label=f"big {body[b] / atr:.1f} ATR"))
     hi, lo = int(h.argmax()), int(l.argmin())
-    events.append(Event(t.iloc[hi], f"{ny_hhmm(t.iloc[hi], tz)} – highest price after the freeze: {h[hi]:.2f} "
-                                    f"({(h[hi] - close) / atr:+.1f} ATR).", "extreme", float(h[hi]), "high"))
-    events.append(Event(t.iloc[lo], f"{ny_hhmm(t.iloc[lo], tz)} – lowest price after the freeze: {l[lo]:.2f} "
-                                    f"({(l[lo] - close) / atr:+.1f} ATR).", "extreme", float(l[lo]), "low"))
+    events.append(Event(t.iloc[hi], f"{ny_hhmm(t.iloc[hi], tz)}  High {h[hi]:.2f} ({(h[hi] - close) / atr:+.1f} ATR)",
+                        "extreme", float(h[hi]), "high"))
+    events.append(Event(t.iloc[lo], f"{ny_hhmm(t.iloc[lo], tz)}  Low {l[lo]:.2f} ({(l[lo] - close) / atr:+.1f} ATR)",
+                        "extreme", float(l[lo]), "low"))
     net = c[-1] - close
-    events.append(Event(t.iloc[-1], f"{ny_hhmm(t.iloc[-1], tz)} – last candle before the time-out closed at {c[-1]:.2f} "
-                                    f"({net:+.1f} pts, {net / atr:+.1f} ATR from the freeze).", "extreme"))
+    events.append(Event(t.iloc[-1], f"{ny_hhmm(t.iloc[-1], tz)}  Last close {c[-1]:.2f} ({net:+.0f} pts)", "extreme"))
     return sorted(events, key=lambda e: e.time_utc), hit
 
 
-def why_points(s: pd.Series, after: pd.DataFrame, hit: dict[str, str], tz: str) -> tuple[list[str], str, float]:
-    """Reasons for the main move: trend, liquidity, volatility, two-sidedness, setup verdict."""
+def why_points(s: pd.Series, after: pd.DataFrame, hit: dict[str, str], tz: str,
+               target_r: float) -> tuple[list[dict], str, float]:
+    """Reasons for the big move: size, trend, fuel (levels), spark (candle), chop, setup verdict."""
     close, atr = float(s["close"]), float(s["atr"])
     if after.empty:
-        return ["No bars after the freeze (data gap)."], "up", 0.0
+        return [bullet("info", "No bars after the freeze (data gap).")], "up", 0.0
     up_ext = float(after["high"].max()) - close
     dn_ext = close - float(after["low"].min())
     main = "up" if up_ext >= dn_ext else "down"
-    size = max(up_ext, dn_ext) / atr
-    other = min(up_ext, dn_ext) / atr
+    size, other = max(up_ext, dn_ext) / atr, min(up_ext, dn_ext) / atr
+    out = [bullet("good", f"Big move: {main.upper()} {max(up_ext, dn_ext):.0f} pts ({size:.1f} ATR) · other side {other:.1f} ATR")
+           if size >= target_r else
+           bullet("warn", f"No big move: the largest swing was {main.upper()} {size:.1f} ATR (< {target_r:.0f}R)")]
     trend = str(s["h1_trend"])
-    out = [f"Main move: {main.upper()} {size:.1f} ATR ({max(up_ext, dn_ext):.0f} pts) versus {other:.1f} ATR the other way."]
     if trend in ("up", "down"):
-        with_trend = (main == "up") == (trend == "up")
-        out.append("It went WITH the H1 trend – on trend days continuation usually wins and counter-trend setups fail."
-                   if with_trend else
-                   "It went AGAINST the H1 trend – a counter-trend move, typically a liquidity grab or a reversal "
-                   "after an extended run.")
+        out.append(bullet("info", f"Went WITH the H1 trend ({trend.upper()}) – trend days reward continuation"
+                          if (main == "up") == (trend == "up") else
+                          f"Went AGAINST the H1 trend ({trend.upper()}) – a counter-trend move"))
     else:
-        out.append("The H1 trend was flat – no higher-timeframe push, so moves tend to stay inside the ranges.")
+        out.append(bullet("info", "H1 trend flat – no higher-timeframe push"))
     levels = scenario_levels(s)
     broke = [k for k, v in hit.items() if v == "broke" and ((levels[k] > close) == (main == "up"))]
-    held = [k for k, v in hit.items() if v == "rejected"]
     if broke:
-        names = ", ".join(LEVEL_LABELS[k] for k in broke)
-        out.append(f"It ran through the {names}: stop orders resting beyond those levels were triggered and fuelled the move "
-                   f"(price is drawn to liquidity).")
+        out.append(bullet("info", "Fuel: broke the " + ", ".join(LEVEL_LABELS[k] for k in broke)
+                          + " → stops beyond it pushed price further"))
     else:
-        ahead = sorted(((abs(p - close), k) for k, p in levels.items() if (p > close) == (main == "up")))
+        ahead = sorted((abs(p - close), k) for k, p in levels.items() if (p > close) == (main == "up"))
         if ahead:
-            out.append(f"It did not reach the next liquidity in its direction ({LEVEL_LABELS[ahead[0][1]]} at "
-                       f"{levels[ahead[0][1]]:.2f}) – the move ran out of fuel before it.")
-    for k in held:
-        out.append(f"The {LEVEL_LABELS[k]} ({levels[k]:.2f}) held at first: price tested it and turned – that level was defended.")
+            out.append(bullet("info", f"Ran out of fuel before the {LEVEL_LABELS[ahead[0][1]]} ({levels[ahead[0][1]]:.2f})"))
+    for k in (k for k, v in hit.items() if v == "rejected"):
+        out.append(bullet("info", f"The {LEVEL_LABELS[k]} ({levels[k]:.2f}) held – price turned there"))
     body = (after["close"] - after["open"]).abs()
     b = int(body.to_numpy().argmax())
     tag = SPECIAL_TIMES.get(ny_hhmm(after["time_utc"].iloc[b], tz))
     if tag and body.iloc[b] >= 1.5 * atr:
-        out.append(f"Volatility came at {tag}: a {body.iloc[b] / atr:.1f}-ATR candle. Scheduled events move price more than "
-                   f"pre-open structure – be careful holding tight stops into them.")
-    if up_ext >= 1.5 * atr and dn_ext >= 1.5 * atr:
-        out.append("Two-sided, choppy price action: both directions moved at least 1.5 ATR, so tight stops on either "
-                   "side were likely to be hit.")
+        out.append(bullet("warn", f"Spark: a {body.iloc[b] / atr:.1f}-ATR candle at {tag}"))
+    if up_ext >= CHOP_ATR * atr and dn_ext >= CHOP_ATR * atr:
+        out.append(bullet("warn", f"Choppy: both sides moved {CHOP_ATR}+ ATR – tight stops on either side got hit"))
     det, d = s["detector"], s["direction_hint"]
     if det == "no_trade":
         missed = bool(s["long_hit_target"]) or bool(s["short_hit_target"])
-        out.append("No setup was present. " + ("A 2R move still came – but without a signal it was not predictable from this bar."
-                                              if missed else "Neither side made +2R before -1R – waiting was right."))
+        out.append(bullet("warn" if missed else "good",
+                          f"No setup here – a {target_r:.0f}R move still came, but nothing signalled it" if missed
+                          else f"No setup and no {target_r:.0f}R move – waiting was right"))
     else:
         worked = bool(s[f"{d}_hit_target"])
-        out.append(f"The {SETUP_NAMES.get(det, det)} signal pointed {d.upper()}: it "
-                   + ("WORKED – a 1-ATR-stop trade reached +2R first." if worked else
-                      "FAILED – a 1-ATR stop was hit before +2R."))
+        out.append(bullet("good" if worked else "bad",
+                          f"{SETUP_NAMES.get(det, det)} → {str(d).upper()}: "
+                          + (f"worked (+{target_r:.0f}R before −1R)" if worked else f"failed (−1R before +{target_r:.0f}R)")))
     return out, main, size
 
 
-def market_story(s: pd.Series, before: pd.DataFrame, after: pd.DataFrame, tz: str) -> Story:
+def market_story(s: pd.Series, before: pd.DataFrame, after: pd.DataFrame, tz: str, target_r: float = 3.0) -> Story:
     """Full explanation for one scenario (after = M5 bars from the freeze to the time-out)."""
     events, hit = after_events(s, after, tz)
-    why, main, size = why_points(s, after, hit, tz)
-    return Story(trigger_text(s), context_points(s, before, tz), events, why, main, size, hit)
+    why, main, size = why_points(s, after, hit, tz, target_r)
+    return Story(trigger_text(s), context_points(s, before, tz, target_r), events, why, main, size, hit)

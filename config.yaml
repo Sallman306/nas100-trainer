@@ -47,7 +47,7 @@ controls:
 outcome:
   horizon_bars: 120           # hidden MFE/MAE horizon in M5 bars
   stop_atr: 1.0               # default stop for R and skip grading
-  target_r: 2.0               # skip is correct if neither side hits +target_r before -1R
+  target_r: 3.0               # big move: skip is correct if neither side hits +3R before -1R
 
 h1_trend:
   fast_ema: 20
@@ -60,7 +60,7 @@ scenarios_file: scenarios.parquet
 practice:
   session_rounds: 10
   no_trade_share: 0.25        # share of no-trade rounds in a mixed session
-  min_rr: 2.0                 # plan check: R:R >= this
+  min_rr: 3.0                 # plan check: R:R >= this (big moves)
   history_days:               # chart history shown at the freeze bar, per timeframe
     M5: 2
     M15: 5

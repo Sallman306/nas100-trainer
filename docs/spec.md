@@ -113,8 +113,8 @@ The replay engine resolves each trade on M1 bars so the TP-or-SL order is correc
 
 - **Fill:** market entry fills at the freeze close + spread; limit entry fills only if touched before the 17:00 NY time-out, else "not filled".
 - **Same-bar conflict:** if one M1 bar hits both TP and SL, count it as a loss (conservative).
-- **Skip grading:** correct skip if neither direction reached +2R before -1R using a default 1×ATR stop; otherwise "missed opportunity".
-- **Plan quality, separate from outcome:** SL beyond the nearest swing (yes/no), R:R ≥ 2 (yes/no), direction matches H1 bias (yes/no). A good plan that loses is still a good plan.
+- **Skip grading:** correct skip if neither direction reached +3R (a big move) before -1R using a default 1×ATR stop; otherwise "missed opportunity". (Was +2R; changed 2026-09-30 – the trainer targets big moves.)
+- **Plan quality, separate from outcome:** SL beyond the nearest swing (yes/no), R:R ≥ 3 (yes/no; was 2), direction matches H1 bias (yes/no). A good plan that loses is still a good plan.
 
 Every round appends one row to `logs/trades.csv` (also kept in SQLite for queries):
 

@@ -1,5 +1,5 @@
 """Rule-based breakdown of the user's own decision: fill, exit, what the stop/target
-needed to be, levels in the way, and one lesson.
+needed to be, levels in the way, and one lesson. Short toned bullets (see story.bullet).
 """
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ import pandas as pd
 
 from engine.grading import PlanChecks
 from engine.replay import Order, TradeResult
-from engine.story import LEVEL_LABELS, SETUP_NAMES, Story, ny_hhmm, scenario_levels
+from engine.story import LEVEL_LABELS, SETUP_NAMES, Story, bullet, ny_hhmm, scenario_levels
 
 
 @dataclass
 class TradeStory:
-    """Bullets about the user's trade, a one-line lesson and an optional "stop needed" price."""
+    """Bullets about the user's decision, a one-line lesson and an optional "stop needed" price."""
 
-    points: list[str]
+    points: list[dict]
     lesson: str
     stop_needed: float | None = None
 
@@ -37,100 +37,87 @@ def trade_story(s: pd.Series, order: Order, trade: TradeResult, checks: PlanChec
                 m1: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp, tz: str) -> TradeStory:
     """Explain a long/short decision. `start`..`end` is the replay window (freeze close..time-out)."""
     atr, long = float(s["atr"]), order.side == "long"
-    pts: list[str] = []
-    stop_needed = None
     win = _window(m1, start, end)
     h, l = win["high"].to_numpy(float), win["low"].to_numpy(float)
-
-    against = story.main_dir != ("up" if long else "down")
-    trend = str(s["h1_trend"])
-    pts.append(f"You went {order.side.upper()} with risk {order.risk:.1f} pts ({order.risk / atr:.2f} ATR) and target "
-               f"{abs(order.tp - order.entry):.1f} pts (R:R {checks.rr_planned:.2f}). "
-               f"The main move was {story.main_dir.upper()} {story.main_atr:.1f} ATR – "
-               + ("AGAINST your direction." if against else "IN your direction."))
-
+    right_dir = story.main_dir == ("up" if long else "down")
+    pts = [
+        bullet("info", f"{order.side.upper()} · risk {order.risk:.0f} pts ({order.risk / atr:.1f} ATR) · "
+                       f"target {abs(order.tp - order.entry):.0f} pts · R:R {checks.rr_planned:.1f}"),
+        bullet("good" if right_dir else "bad",
+               f"The big move went {story.main_dir.upper()} → your direction was {'right' if right_dir else 'wrong'}"),
+    ]
     if not trade.filled:
         if len(h):
             closest = float(l.min()) if order.entry < float(s["close"]) else float(h.max())
-            pts.append(f"Your pending entry at {order.entry:.2f} was never reached; the closest price was {closest:.2f} "
-                       f"({abs(closest - order.entry):.1f} pts away).")
-        return TradeStory(pts, "The entry never came. If the setup is valid at the freeze, enter at market or place the "
-                               "limit where price actually trades (e.g. the gap/level edge).")
+            pts.append(bullet("bad", f"Entry {order.entry:.2f} never reached (closest {closest:.2f}, "
+                                     f"{abs(closest - order.entry):.0f} pts away)"))
+        return TradeStory(pts, "The entry never came. Enter at market, or put the limit where price actually trades.")
 
     minutes = int((trade.exit_time - trade.fill_time).total_seconds() // 60) if trade.exit_time is not None else 0
-    fill_txt = "at market" if order.order_type == "market" else f"when price came to {order.entry:.2f}"
-    pts.append(f"Filled {fill_txt} at {trade.fill_price:.2f} (spread included) at {ny_hhmm(trade.fill_time, tz)} ET.")
-    reason = {"tp": "hit your TP", "sl": "hit your SL", "timeout": "was closed by the 17:00 time-out"}[trade.exit_reason]
-    pts.append(f"The trade {reason} at {ny_hhmm(trade.exit_time, tz)} ET after {minutes} min, result {trade.result_r:+.2f}R. "
-               f"Best open profit along the way: {trade.mfe_r:+.2f}R, worst drawdown: -{trade.mae_r:.2f}R.")
-
+    how = "market" if order.order_type == "market" else "limit"
+    pts.append(bullet("info", f"Filled {trade.fill_price:.2f} at {ny_hhmm(trade.fill_time, tz)} ({how})"))
+    exit_name = {"tp": "TP hit", "sl": "SL hit", "timeout": "Closed at 17:00"}[trade.exit_reason]
+    tone = "good" if trade.result_r > 0 else "bad" if trade.result_r < 0 else "info"
+    pts.append(bullet(tone, f"{exit_name} at {ny_hhmm(trade.exit_time, tz)} after {minutes} min → {trade.result_r:+.2f}R"))
+    pts.append(bullet("info", f"Best open profit {trade.mfe_r:+.2f}R · worst −{trade.mae_r:.2f}R"))
     if checks.swing_price == checks.swing_price:
-        side = "below the swing low" if long else "above the swing high"
-        pts.append(f"Your SL was {'' if checks.sl_beyond_swing else 'NOT '}{side} at {checks.swing_price:.2f}"
-                   + (" – it was protected by structure." if checks.sl_beyond_swing else
-                      " – it sat inside normal noise where a retest could take it."))
+        side = "low" if long else "high"
+        pts.append(bullet("good", f"SL beyond the swing {side} {checks.swing_price:.2f} (protected by structure)")
+                   if checks.sl_beyond_swing else
+                   bullet("bad", f"SL inside the swing {side} {checks.swing_price:.2f} – in the noise"))
 
     fill_i = int(win["time_utc"].searchsorted(trade.fill_time)) if len(win) else 0
     tp_mask = h >= order.tp if long else l <= order.tp
     tp_i = _first(tp_mask[fill_i:])
-
     levels = scenario_levels(s)
-    blockers = [k for k, p in levels.items() if (order.entry < p < order.tp) or (order.tp < p < order.entry)]
-    for k in blockers:
+    for k in (k for k, p in levels.items() if (order.entry < p < order.tp) or (order.tp < p < order.entry)):
         status = story.levels_hit.get(k)
         if tp_i is not None:
-            tail = " Price paused there but eventually reached your TP." if status == "rejected" else " Price got through it."
+            pts.append(bullet("info", f"{LEVEL_LABELS[k].capitalize()} {levels[k]:.2f} was in the way – price got through"))
+        elif status == "rejected":
+            pts.append(bullet("bad", f"{LEVEL_LABELS[k].capitalize()} {levels[k]:.2f} blocked your TP – price turned there"))
         else:
-            tail = {"rejected": " Price tested it and turned – it blocked your target.",
-                    "broke": " Price broke through it but still fell short of your TP."}.get(status or "", " Price never got there.")
-        pts.append(f"The {LEVEL_LABELS[k]} ({levels[k]:.2f}) sat between your entry and TP.{tail}")
-    lesson = ""
+            pts.append(bullet("info", f"{LEVEL_LABELS[k].capitalize()} {levels[k]:.2f} sat before your TP"))
+
+    stop_needed, lesson = None, ""
     if trade.exit_reason == "sl":
         if tp_i is not None:
             k = fill_i + tp_i
             stop_needed = float(l[fill_i:k + 1].min()) if long else float(h[fill_i:k + 1].max())
-            t_tp = win["time_utc"].iloc[k]
             need = abs(trade.fill_price - stop_needed)
-            pts.append(f"After stopping you out, price DID reach your TP at {ny_hhmm(t_tp, tz)} ET. To survive, the stop "
-                       f"needed to be beyond {stop_needed:.2f} (risk {need:.1f} pts = {need / atr:.1f} ATR instead of "
-                       f"{order.risk:.1f}). Your direction was right – the stop was too tight.")
-            lesson = (f"Right idea, stop too tight: put the SL beyond the level that invalidates the setup "
-                      f"(here beyond {stop_needed:.2f}) and size the position down instead.")
+            pts.append(bullet("bad", f"Price hit your TP later ({ny_hhmm(win['time_utc'].iloc[k], tz)}). "
+                                     f"Stop needed: beyond {stop_needed:.2f} ({need:.0f} pts / {need / atr:.1f} ATR)"))
+            lesson = (f"Right idea, stop too tight. Put the SL beyond the level that kills the idea "
+                      f"(here {stop_needed:.2f}) and trade smaller.")
+        elif right_dir:
+            lesson = "Right direction, bad timing: you were stopped before the big move. Wait for the trigger or use a structural stop."
+        elif str(s["h1_trend"]) in ("up", "down") and (s["h1_trend"] == "up") != long:
+            lesson = "You fought the H1 trend and the trend won. Trade with the H1 bias, or wait for a clear reversal."
         else:
-            pts.append("Price never reached your TP before 17:00 – the direction/target was wrong, not only the stop.")
-            if against and trend in ("up", "down") and (trend == "up") != long:
-                lesson = "You traded against the H1 trend and the trend won. Trade with the H1 bias or wait for a confirmed reversal."
-            else:
-                lesson = (f"The direction was wrong: price was drawn {story.main_dir} toward liquidity. Before entering, "
-                          f"check which nearby level price is more likely to run for.")
+            lesson = f"Wrong direction: price was drawn {story.main_dir} toward liquidity. Check which level price is hunting first."
     elif trade.exit_reason == "tp":
         rest = h[fill_i:] if long else l[fill_i:]
-        best = (float(rest.max()) - trade.fill_price) if long else (trade.fill_price - float(rest.min()))
-        best_r = best / order.risk
+        best_r = ((float(rest.max()) - trade.fill_price) if long else (trade.fill_price - float(rest.min()))) / order.risk
         if best_r > trade.result_r + 1.0:
-            pts.append(f"Price kept going to {best_r:+.1f}R before 17:00 – a runner or a target at the next level would "
-                       f"have paid more.")
-            lesson = "Good trade. Consider taking part at 2R and leaving a runner to the next key level."
+            pts.append(bullet("info", f"Price kept going to {best_r:+.1f}R – a runner would have paid more"))
+            lesson = "Good trade. Take part at the target and let a runner ride to the next key level."
         else:
-            pts.append("Price did not go much further after your TP – a well-placed target.")
-            lesson = "Good trade: plan and outcome matched. Repeat this exact process."
+            lesson = "Good trade – plan and outcome matched. Repeat this process."
     else:
-        pts.append(f"Neither SL nor TP was hit by 17:00. The TP needed {checks.rr_planned:.1f}R but the trade only reached "
-                   f"{trade.mfe_r:+.1f}R.")
-        lesson = "The target was beyond what the day offered – aim for the nearest key level instead of a fixed far target."
+        pts.append(bullet("bad", f"TP needed {checks.rr_planned:.1f}R, the trade only reached {trade.mfe_r:+.1f}R"))
+        lesson = "The target was beyond what the day offered. Aim at the nearest key level."
     return TradeStory(pts, lesson, stop_needed)
 
 
-def skip_story(s: pd.Series, story: Story) -> TradeStory:
-    """Explain a skip: was there a +2R trade, and which side."""
+def skip_story(s: pd.Series, story: Story, target_r: float = 3.0) -> TradeStory:
+    """Explain a skip: was there a big (+target_r) trade, and which side."""
     long_ok, short_ok = bool(s["long_hit_target"]), bool(s["short_hit_target"])
     if not (long_ok or short_ok):
-        return TradeStory(["Neither a long nor a short with a 1-ATR stop reached +2R before -1R."],
-                          "Good patience – nothing clean happened. Skipping is a position.")
+        return TradeStory([bullet("good", f"No {target_r:.0f}R move either way (1-ATR stop) – nothing big to catch")],
+                          "Good patience. Skipping is a position.")
     sides = " and ".join(x for x, ok in (("LONG", long_ok), ("SHORT", short_ok)) if ok)
-    pts = [f"A {sides} at the freeze price with a 1-ATR stop reached +2R before the stop.",
-           f"Best possible: {float(s['best_possible_r']):+.1f}R ({'long' if s['long_best_r'] >= s['short_best_r'] else 'short'})."]
+    pts = [bullet("bad", f"A {sides} from the freeze price made +{target_r:.0f}R before −1R (1-ATR stop)")]
     if s["detector"] == "no_trade":
         return TradeStory(pts, "No setup was present, so missing this is fine – a move without a signal is not an edge.")
-    return TradeStory(pts, f"The {SETUP_NAMES.get(str(s['detector']), s['detector'])} signal was valid and worked. Review the trigger "
-                           f"above and ask what stopped you from taking it.")
+    return TradeStory(pts, f"The {SETUP_NAMES.get(str(s['detector']), s['detector'])} signal worked here. "
+                           f"Review the setup and what stopped you from taking it.")

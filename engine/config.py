@@ -20,9 +20,9 @@ class PracticeConfig:
     spread: float = 1.5
     session_rounds: int = 10
     no_trade_share: float = 0.25
-    min_rr: float = 2.0
+    min_rr: float = 3.0
     stop_atr: float = 1.0
-    target_r: float = 2.0
+    target_r: float = 3.0
     swing_bars: int = 2
     history_days: dict[str, int] = field(default_factory=lambda: {"M5": 2, "M15": 5, "H1": 15})
     fake_date: date = date(2000, 1, 3)
